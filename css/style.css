@@ -1,0 +1,650 @@
+/* ============================================================
+   TAXI POINTE-NOIRE — Dark Mode UI
+   Mobile-first, Android optimized
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ── Reset & Variables ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary:   #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-card:      #0f3460;
+  --bg-input:     #1e2a4a;
+  --green:        #00c851;
+  --green-dark:   #009c3e;
+  --red:          #ff4444;
+  --red-dark:     #cc0000;
+  --text-primary: #e8e8f0;
+  --text-muted:   #8892b0;
+  --accent:       #e94560;
+  --radius:       14px;
+  --shadow:       0 8px 32px rgba(0,0,0,0.4);
+  --transition:   0.25s ease;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Layout ── */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+/* ── Header ── */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--green);
+  letter-spacing: 0.5px;
+}
+
+.header-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.driver-count-badge {
+  background: var(--bg-card);
+  border: 1px solid rgba(0,200,81,0.3);
+  color: var(--green);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 20px;
+}
+
+/* ── Map ── */
+#map {
+  flex: 1;
+  width: 100%;
+  z-index: 1;
+}
+
+/* Leaflet dark overlay */
+.leaflet-tile {
+  filter: brightness(0.85) saturate(0.7) hue-rotate(200deg);
+}
+
+.leaflet-container {
+  background: var(--bg-primary);
+}
+
+/* ── Panneau chauffeur (slide-up depuis le bas) ── */
+#driver-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 0 20px 32px;
+  z-index: 500;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.6);
+  max-height: 85dvh;
+  overflow-y: auto;
+}
+
+#driver-panel.open {
+  transform: translateY(0);
+}
+
+.panel-handle {
+  width: 40px;
+  height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+  margin: 12px auto 20px;
+}
+
+.panel-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+}
+
+.panel-close:hover { background: rgba(255,255,255,0.15); }
+
+.driver-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.driver-photo {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--green);
+  flex-shrink: 0;
+}
+
+.driver-info h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.driver-info .plate {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
+.driver-info .vehicle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Distance badge */
+.distance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.distance-badge::before {
+  content: '📍';
+  font-size: 0.9rem;
+}
+
+/* Disponibilité */
+.availability-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  margin-left: 8px;
+}
+
+.availability-badge.available {
+  background: rgba(0, 200, 81, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(0,200,81,0.3);
+}
+
+.availability-badge.unavailable {
+  background: rgba(255, 68, 68, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(255,68,68,0.3);
+}
+
+/* Bouton WhatsApp */
+.btn-whatsapp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  background: var(--green);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--transition), transform 0.1s;
+  margin-top: 8px;
+}
+
+.btn-whatsapp:active {
+  background: var(--green-dark);
+  transform: scale(0.98);
+}
+
+.btn-whatsapp svg {
+  width: 22px;
+  height: 22px;
+  fill: white;
+}
+
+/* Notification GPS */
+.gps-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  z-index: 999;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.gps-toast.show { opacity: 1; }
+
+/* ============================================================
+   PAGE CHAUFFEUR — driver.html
+   ============================================================ */
+
+#driver-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--bg-primary);
+}
+
+/* Écran de connexion */
+#login-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 32px 24px;
+  gap: 32px;
+}
+
+.login-logo {
+  font-size: 3.5rem;
+  text-align: center;
+}
+
+.login-title {
+  text-align: center;
+}
+
+.login-title h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.login-title p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.login-form {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-group label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.input-group input {
+  background: var(--bg-input);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: 'Inter', sans-serif;
+  padding: 14px 16px;
+  outline: none;
+  transition: border-color var(--transition);
+  width: 100%;
+}
+
+.input-group input:focus {
+  border-color: var(--green);
+}
+
+.input-group input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 16px;
+  background: var(--green);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), transform 0.1s;
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-primary:active {
+  background: var(--green-dark);
+  transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-msg {
+  background: rgba(255,68,68,0.1);
+  border: 1px solid rgba(255,68,68,0.3);
+  color: var(--red);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  text-align: center;
+  display: none;
+}
+
+.error-msg.show { display: block; }
+
+/* Tableau de bord chauffeur */
+#dashboard-screen {
+  display: none;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+#dashboard-screen.active {
+  display: flex;
+}
+
+.dashboard-header {
+  background: var(--bg-secondary);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+
+.dashboard-photo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--green);
+}
+
+.dashboard-info h2 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dashboard-info .dash-plate {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
+.logout-btn {
+  margin-left: auto;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background var(--transition);
+}
+
+.logout-btn:hover { background: rgba(255,255,255,0.12); }
+
+/* Toggle Disponibilité */
+.status-section {
+  padding: 28px 24px;
+  flex-shrink: 0;
+}
+
+.status-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.toggle-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.big-toggle {
+  width: 100%;
+  max-width: 340px;
+  height: 80px;
+  border-radius: 20px;
+  border: none;
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: background 0.3s, transform 0.1s, box-shadow 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.big-toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.08);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.big-toggle:active::after { opacity: 1; }
+.big-toggle:active { transform: scale(0.97); }
+
+.big-toggle.available {
+  background: var(--green);
+  color: white;
+  box-shadow: 0 6px 24px rgba(0,200,81,0.4);
+}
+
+.big-toggle.unavailable {
+  background: var(--red);
+  color: white;
+  box-shadow: 0 6px 24px rgba(255,68,68,0.4);
+}
+
+.toggle-icon {
+  font-size: 1.8rem;
+}
+
+.status-text-detail {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Mini-carte */
+.map-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 0;
+  min-height: 220px;
+}
+
+.map-label {
+  padding: 10px 24px 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+#driver-map {
+  flex: 1;
+  min-height: 200px;
+}
+
+.gps-status {
+  padding: 8px 24px 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.gps-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.gps-dot.active {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Marqueurs Leaflet custom ── */
+.car-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transition: transform 0.2s;
+}
+
+.car-marker:hover { transform: scale(1.2); }
+
+/* Loader */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 9999;
+  transition: opacity 0.4s;
+}
+
+.loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(0,200,81,0.2);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+/* ── Responsive desktop ── */
+@media (min-width: 640px) {
+  #driver-panel {
+    max-width: 400px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    border-radius: var(--radius);
+    bottom: 20px;
+  }
+
+  #driver-panel.open {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .login-logo { font-size: 5rem; }
+}
