@@ -85,6 +85,133 @@
 
   </nav>
 
+  <!-- ══════════════════════════════════════════
+       PWA INSTALL POPUP — Android
+  ══════════════════════════════════════════ -->
+  <div id="pwa-install-overlay" class="pwa-install-overlay" role="dialog" aria-modal="true" aria-label="Installer l'application">
+    <div class="pwa-install-card" id="pwa-install-card">
+      <div class="pwa-install-handle"></div>
+
+      <div class="pwa-install-header">
+        <img src="icons/icon-192.png" alt="PNR Taxi" class="pwa-install-icon" />
+        <div class="pwa-install-info">
+          <h2>Installer PNR Taxi</h2>
+          <p>Accédez à votre taxi en un clic, même sans connexion</p>
+        </div>
+      </div>
+
+      <div class="pwa-install-features">
+        <span class="pwa-install-feature">⚡ Rapide</span>
+        <span class="pwa-install-feature">📶 Hors-ligne</span>
+        <span class="pwa-install-feature">📍 GPS intégré</span>
+        <span class="pwa-install-feature">🔔 Notifications</span>
+      </div>
+
+      <div class="pwa-install-actions">
+        <button class="pwa-install-btn" id="pwa-install-btn">Installer l'application</button>
+        <button class="pwa-install-dismiss" id="pwa-install-dismiss">Plus tard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       PWA INSTALL POPUP — iOS (Safari)
+  ══════════════════════════════════════════ -->
+  <div id="pwa-ios-overlay" class="pwa-install-overlay" role="dialog" aria-modal="true" aria-label="Installer sur iPhone">
+    <div class="pwa-install-card">
+      <div class="pwa-install-handle"></div>
+
+      <div class="pwa-install-header">
+        <img src="icons/icon-192.png" alt="PNR Taxi" class="pwa-install-icon" />
+        <div class="pwa-install-info">
+          <h2>Installer PNR Taxi</h2>
+          <p>Ajoutez l'app sur votre écran d'accueil en 3 étapes</p>
+        </div>
+      </div>
+
+      <div class="pwa-ios-steps">
+        <div class="pwa-ios-step">
+          <div class="pwa-ios-step-num">1</div>
+          <div class="pwa-ios-step-text">Appuyez sur le bouton <strong>Partager</strong> en bas de Safari</div>
+        </div>
+        <div class="pwa-ios-step">
+          <div class="pwa-ios-step-num">2</div>
+          <div class="pwa-ios-step-text">Faites défiler et choisissez <strong>"Sur l'écran d'accueil"</strong></div>
+        </div>
+        <div class="pwa-ios-step">
+          <div class="pwa-ios-step-num">3</div>
+          <div class="pwa-ios-step-text">Appuyez sur <strong>"Ajouter"</strong> en haut à droite</div>
+        </div>
+      </div>
+
+      <div class="pwa-install-actions">
+        <button class="pwa-install-btn" id="pwa-ios-dismiss-btn">J'ai compris</button>
+        <button class="pwa-install-dismiss" id="pwa-ios-close-btn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── PWA Install Logic ──────────────────────────────────────
+    const DISMISS_KEY = 'pnr_install_dismissed';
+    const DISMISS_DAYS = 3; // re-afficher après 3 jours
+
+    function wasDismissedRecently() {
+      const ts = localStorage.getItem(DISMISS_KEY);
+      if (!ts) return false;
+      return Date.now() - parseInt(ts) < DISMISS_DAYS * 86400000;
+    }
+
+    function dismiss(key) {
+      if (key) localStorage.setItem(key, Date.now());
+      document.getElementById('pwa-install-overlay').classList.remove('visible');
+      document.getElementById('pwa-ios-overlay').classList.remove('visible');
+    }
+
+    function showOverlay(id) {
+      document.getElementById(id).classList.add('visible');
+    }
+
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                      || navigator.standalone === true;
+
+    // Ne pas afficher si déjà installé ou refusé récemment
+    if (!isStandalone && !wasDismissedRecently()) {
+      if (isIOS) {
+        // iOS : montrer les instructions après 2.5s
+        setTimeout(() => showOverlay('pwa-ios-overlay'), 2500);
+        document.getElementById('pwa-ios-dismiss-btn').addEventListener('click', () => dismiss(DISMISS_KEY));
+        document.getElementById('pwa-ios-close-btn').addEventListener('click', () => dismiss(null));
+        document.getElementById('pwa-ios-overlay').addEventListener('click', (e) => {
+          if (e.target === document.getElementById('pwa-ios-overlay')) dismiss(null);
+        });
+      } else {
+        // Android/Chrome : écouter beforeinstallprompt
+        let deferredPrompt = null;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          setTimeout(() => showOverlay('pwa-install-overlay'), 2000);
+        });
+
+        document.getElementById('pwa-install-btn').addEventListener('click', async () => {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          deferredPrompt = null;
+          if (outcome === 'accepted') dismiss(null);
+          else dismiss(DISMISS_KEY);
+        });
+
+        document.getElementById('pwa-install-dismiss').addEventListener('click', () => dismiss(DISMISS_KEY));
+        document.getElementById('pwa-install-overlay').addEventListener('click', (e) => {
+          if (e.target === document.getElementById('pwa-install-overlay')) dismiss(null);
+        });
+      }
+    }
+  </script>
 
 </body>
 </html>
