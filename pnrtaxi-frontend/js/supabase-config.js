@@ -12,7 +12,7 @@
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-const SUPABASE_URL      = 'VOTRE_PROJECT_URL';   // ex: https://abcdef.supabase.co
-const SUPABASE_ANON_KEY = 'VOTRE_ANON_KEY';      // clé "anon public"
+const SUPABASE_URL      = 'https://rrisnxbuuoqfdewoqcfp.supabase.co';   // ex: https://abcdef.supabase.co
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyaXNueGJ1dW9xZmRld29xY2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2NDAxMjQsImV4cCI6MjA5MDIxNjEyNH0.3p4HkWf_mSPBDS32Yh1VOk6hSjFLAG2lqQg9oXO4_XY';      // clé "anon public"
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

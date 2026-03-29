@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Générateur d'icônes PNR Taxi</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 30px; gap: 20px; }
+    h1 { color: #1A9BC5; }
+    canvas { border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
+    button { background: #1A9BC5; color: white; border: none; padding: 12px 28px; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #1585aa; }
+    .row { display: flex; gap: 30px; align-items: flex-end; flex-wrap: wrap; justify-content: center; }
+    .col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    p { color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Générateur d'icônes PNR Taxi</h1>
+  <p>Cliquez sur "Télécharger" pour sauvegarder chaque icône dans le dossier icons/</p>
+
+  <div class="row">
+    <div class="col">
+      <canvas id="c512" width="512" height="512"></canvas>
+      <button onclick="download('c512','icon-512.png')">⬇ icon-512.png</button>
+    </div>
+    <div class="col">
+      <canvas id="c192" width="192" height="192"></canvas>
+      <button onclick="download('c192','icon-192.png')">⬇ icon-192.png</button>
+    </div>
+    <div class="col">
+      <canvas id="c180" width="180" height="180"></canvas>
+      <button onclick="download('c180','apple-touch-icon.png')">⬇ apple-touch-icon.png</button>
+    </div>
+    <div class="col">
+      <canvas id="c32" width="32" height="32"></canvas>
+      <button onclick="download('c32','favicon-32.png')">⬇ favicon-32.png</button>
+    </div>
+  </div>
+
+  <script>
+    const BLUE = '#1A9BC5';
+    const WHITE = '#ffffff';
+
+    function drawLogo(ctx, size) {
+      const s = size / 512; // scale factor
+
+      // Fond bleu
+      ctx.fillStyle = BLUE;
+      ctx.fillRect(0, 0, size, size);
+
+      // Police
+      const boldFont = `900 ${Math.round(108*s)}px "Arial Black", "Arial Bold", Arial, sans-serif`;
+      ctx.fillStyle = WHITE;
+      ctx.font = boldFont;
+      ctx.textBaseline = 'alphabetic';
+
+      // PNR
+      ctx.fillText('PNR', Math.round(16*s), Math.round(210*s));
+
+      // Cercle autour du T
+      const cx = Math.round(264*s);
+      const cy = Math.round(163*s);
+      const r  = Math.round(56*s);
+      ctx.strokeStyle = WHITE;
+      ctx.lineWidth = Math.max(2, Math.round(14*s));
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.stroke();
+
+      // T dans le cercle
+      ctx.font = `900 ${Math.round(100*s)}px "Arial Black", "Arial Bold", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('T', cx, Math.round(207*s));
+      ctx.textAlign = 'left';
+
+      // AXI
+      ctx.font = boldFont;
+      ctx.fillText('AXI', Math.round(322*s), Math.round(210*s));
+
+      // Damier — rangée 1 (carrés blancs)
+      ctx.fillStyle = WHITE;
+      [[0,310],[204,310],[408,310]].forEach(([x,y]) => {
+        ctx.fillRect(Math.round(x*s), Math.round(y*s), Math.round(102*s)+1, Math.round(101*s)+1);
+      });
+
+      // Damier — rangée 2
+      [[102,411],[306,411]].forEach(([x,y]) => {
+        ctx.fillRect(Math.round(x*s), Math.round(y*s), Math.round(102*s)+1, Math.round(101*s)+1);
+      });
+    }
+
+    function download(canvasId, filename) {
+      const a = document.createElement('a');
+      a.download = filename;
+      a.href = document.getElementById(canvasId).toDataURL('image/png');
+      a.click();
+    }
+
+    // Dessiner toutes les tailles
+    ['c512','c192','c180','c32'].forEach(id => {
+      const canvas = document.getElementById(id);
+      drawLogo(canvas.getContext('2d'), canvas.width);
+    });
+  </script>
+</body>
+</html>

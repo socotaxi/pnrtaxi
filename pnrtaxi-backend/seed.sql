@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS public.drivers (
 -- ── 2. Sécurité (Row Level Security) ────────────────────────
 ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
 
+-- Suppression avant recréation (idempotent — safe à relancer)
+DROP POLICY IF EXISTS "Lecture publique" ON public.drivers;
+DROP POLICY IF EXISTS "Mise à jour libre" ON public.drivers;
+
 -- Lecture publique : tout le monde peut voir les chauffeurs
 CREATE POLICY "Lecture publique"
   ON public.drivers FOR SELECT
@@ -33,8 +37,16 @@ CREATE POLICY "Mise à jour libre"
   WITH CHECK (true);
 
 -- ── 3. Activation du temps réel ─────────────────────────────
--- Permet à l'app passager de recevoir les mises à jour live
-ALTER PUBLICATION supabase_realtime ADD TABLE public.drivers;
+-- Ajout uniquement si pas déjà membre (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'drivers'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.drivers;
+  END IF;
+END $$;
 
 -- ── 4. Données de démonstration ─────────────────────────────
 --  6 chauffeurs fictifs avec vraies coordonnées GPS de Pointe-Noire

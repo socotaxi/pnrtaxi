@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e7490" />
+  <meta name="description" content="PNR Taxi — Enregistrement du véhicule" />
+  <title>PNR Taxi — Mon véhicule</title>
+
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <link rel="stylesheet" href="css/style.css" />
+
+  <style>
+    html, body { height: 100%; overflow: hidden; background: white; }
+
+    :root {
+      --brand-50:  #ecfeff;
+      --brand-100: #cffafe;
+      --brand-200: #a5f3fc;
+      --brand-500: #06b6d4;
+      --brand-600: #0891b2;
+      --brand-700: #0e7490;
+    }
+
+    .vehicle-wrapper { position: fixed; inset: 0; overflow: hidden; }
+
+    .vehicle-screen {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      opacity: 0;
+      transform: translateX(48px);
+      pointer-events: none;
+      transition: opacity 0.32s ease, transform 0.32s ease;
+      background: linear-gradient(to bottom, #0e7490 0%, #0891b2 220px, white 220px);
+    }
+
+    .vehicle-screen.active { opacity: 1; transform: translateX(0); pointer-events: all; }
+
+    .vehicle-content {
+      width: 100%;
+      max-width: 420px;
+      padding: 0 20px 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Hero ── */
+    .vh-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 52px;
+      margin-bottom: 20px;
+    }
+
+    .vh-icon { font-size: 2.8rem; line-height: 1; margin-bottom: 8px; filter: drop-shadow(0 4px 16px rgba(255,255,255,0.2)); }
+    .vh-title { font-size: 1.3rem; font-weight: 800; color: white; text-align: center; }
+    .vh-subtitle { font-size: 0.82rem; color: rgba(255,255,255,0.78); margin-top: 5px; text-align: center; }
+
+    /* ── Bouton retour ── */
+    .vh-back {
+      align-self: flex-start;
+      margin-top: 20px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.85);
+      font-size: 0.9rem;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      padding: 8px 0;
+      text-decoration: none;
+    }
+    .vh-back:hover { color: white; }
+
+    /* ── Carte ── */
+    .vh-card {
+      width: 100%;
+      background: white;
+      border-radius: 20px;
+      padding: 22px 18px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+    }
+
+    .vh-card-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); text-align: center; }
+
+    /* ── Sélection type ── */
+    .vehicle-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .vehicle-type-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 22px 10px;
+      border: 2px solid var(--border); border-radius: 16px;
+      background: var(--bg-secondary); cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s, box-shadow 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .vehicle-type-btn:active { transform: scale(0.97); }
+    .vehicle-type-btn:hover  { border-color: var(--brand-500); background: var(--brand-50); }
+    .vehicle-type-btn.selected {
+      border-color: var(--brand-600); background: var(--brand-50);
+      box-shadow: 0 0 0 3px var(--brand-100);
+    }
+    .vt-emoji { font-size: 2.4rem; line-height: 1; }
+    .vt-label { font-size: 0.92rem; font-weight: 700; color: var(--text-primary); }
+    .vt-desc  { font-size: 0.72rem; color: var(--text-muted); text-align: center; line-height: 1.4; }
+
+    /* ── Champs ── */
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+
+    .field-label {
+      font-size: 0.79rem; font-weight: 600;
+      color: var(--text-muted); letter-spacing: 0.3px;
+    }
+
+    .field-input {
+      width: 100%; padding: 12px 13px;
+      background: var(--bg-input); border: 1.5px solid var(--border);
+      border-radius: 12px; font-size: 0.93rem;
+      font-family: 'Inter', sans-serif; color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .field-input:focus {
+      border-color: var(--brand-600);
+      box-shadow: 0 0 0 3px var(--brand-100);
+      background: white;
+    }
+    .field-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+    .field-input.invalid { border-color: var(--red); }
+
+    select.field-input {
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 13px center;
+      background-color: var(--bg-input); cursor: pointer;
+    }
+
+    .fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* ── Neuf / Occasion toggle ── */
+    .condition-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .cond-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 11px 10px;
+      border: 2px solid var(--border); border-radius: 12px;
+      background: var(--bg-secondary); cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.18s;
+    }
+    .cond-btn:active { transform: scale(0.97); }
+    .cond-btn.selected {
+      border-color: var(--brand-600); background: var(--brand-50);
+      color: var(--brand-700); box-shadow: 0 0 0 3px var(--brand-100);
+    }
+
+    /* ── Hint de validation permis ── */
+    .field-hint {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .field-hint.ok  { color: var(--green-dark); }
+    .field-hint.err { color: var(--red-dark); }
+
+    /* ── Bouton principal ── */
+    .btn-vh {
+      width: 100%; padding: 14px 16px;
+      background: var(--brand-600); color: white;
+      font-size: 1rem; font-weight: 700;
+      border: none; border-radius: 14px; cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 14px rgba(8,145,178,0.35);
+    }
+    .btn-vh:hover    { background: var(--brand-700); }
+    .btn-vh:active   { transform: scale(0.98); box-shadow: none; }
+    .btn-vh:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* ── Erreur ── */
+    .vh-error {
+      background: var(--red-50); border: 1px solid rgba(239,68,68,0.25);
+      color: var(--red-dark); border-radius: 10px;
+      padding: 10px 14px; font-size: 0.83rem; text-align: center; display: none;
+    }
+    .vh-error.show { display: block; }
+
+    /* ── Avatar picker ── */
+    .avatar-picker {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .avatar-picker:hover { border-color: var(--brand-500); background: var(--brand-50); }
+    .avatar-picker.has-photo { border-style: solid; border-color: var(--brand-600); background: var(--brand-50); }
+
+    .avatar-preview {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .avatar-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+    /* Preview permis — format carte */
+    .permis-preview {
+      width: 72px; height: 46px;
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .permis-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+
+    .avatar-info { display: flex; flex-direction: column; gap: 2px; }
+    .avatar-label { font-size: 0.88rem; font-weight: 600; color: var(--text-primary); }
+    .avatar-hint  { font-size: 0.74rem; color: var(--text-muted); }
+
+    /* ── Indicateur d'étapes ── */
+    .steps-indicator { display: flex; align-items: center; gap: 6px; margin: 14px 0 18px; }
+    .step-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.35);
+      transition: background 0.2s, width 0.2s;
+    }
+    .step-dot.active { background: white; width: 20px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="vehicle-wrapper">
+
+  <!-- ══════════════════════════════════════
+       ÉCRAN 1 — Type de véhicule
+  ══════════════════════════════════════ -->
+  <div id="screen-type" class="vehicle-screen active">
+    <div class="vehicle-content">
+
+      <div class="vh-hero">
+        <div class="vh-icon">🚗</div>
+        <div class="vh-title">Votre véhicule</div>
+        <div class="vh-subtitle">Choisissez le type de véhicule que vous conduisez</div>
+      </div>
+
+      <div class="steps-indicator">
+        <div class="step-dot active"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+      </div>
+
+      <div class="vh-card">
+        <p class="vh-card-title">Quel type de véhicule ?</p>
+
+        <div class="vehicle-type-grid">
+          <button class="vehicle-type-btn" id="btn-type-car">
+            <span class="vt-emoji">🚗</span>
+            <span class="vt-label">Voiture</span>
+            <span class="vt-desc">Berline, SUV,<br>Monospace…</span>
+          </button>
+          <button class="vehicle-type-btn" id="btn-type-moto">
+            <span class="vt-emoji">🏍️</span>
+            <span class="vt-label">Moto</span>
+            <span class="vt-desc">Scooter,<br>Moto-taxi…</span>
+          </button>
+        </div>
+
+        <button class="btn-vh" id="btn-next-type" disabled>Continuer →</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       ÉCRAN 2 — Détails du véhicule
+  ══════════════════════════════════════ -->
+  <div id="screen-details" class="vehicle-screen">
+    <div class="vehicle-content">
+
+      <button class="vh-back" id="btn-back-type">← Retour</button>
+
+      <div class="vh-hero" style="padding-top:16px;margin-bottom:12px">
+        <div class="vh-icon" id="details-icon">🚗</div>
+        <div class="vh-title" id="details-title">Détails de votre voiture</div>
+      </div>
+
+      <div class="steps-indicator">
+        <div class="step-dot"></div>
+        <div class="step-dot active"></div>
+        <div class="step-dot"></div>
+      </div>
+
+      <div class="vh-card">
+
+        <!-- Marque -->
+        <div class="field-group">
+          <label class="field-label" for="v-marque">Marque</label>
+          <select id="v-marque" class="field-input">
+            <option value="">— Sélectionner —</option>
+          </select>
+        </div>
+
+        <!-- Modèle -->
+        <div class="field-group">
+          <label class="field-label" for="v-modele">Modèle</label>
+          <select id="v-modele" class="field-input" disabled>
+            <option value="">— Choisir d'abord une marque —</option>
+          </select>
+        </div>
+
+        <!-- Couleur -->
+        <div class="field-group">
+          <label class="field-label" for="v-couleur">Couleur</label>
+          <select id="v-couleur" class="field-input">
+            <option value="">— Sélectionner —</option>
+            <option value="Blanc">⬜ Blanc</option>
+            <option value="Noir">⬛ Noir</option>
+            <option value="Gris">🩶 Gris</option>
+            <option value="Rouge">🔴 Rouge</option>
+            <option value="Bleu">🔵 Bleu</option>
+            <option value="Vert">🟢 Vert</option>
+            <option value="Jaune">🟡 Jaune</option>
+            <option value="Orange">🟠 Orange</option>
+            <option value="Marron">🟤 Marron</option>
+            <option value="Beige">Beige</option>
+            <option value="Argent">🪙 Argent</option>
+            <option value="Or">🌟 Or</option>
+            <option value="Bordeaux">Bordeaux</option>
+            <option value="Violet">Violet</option>
+            <option value="Crème">Crème</option>
+          </select>
+        </div>
+
+        <!-- Immatriculation -->
+        <div class="field-group">
+          <label class="field-label" for="v-plaque">Plaque d'immatriculation</label>
+          <input
+            type="text" id="v-plaque" class="field-input"
+            placeholder="PNR-1234-A" maxlength="15"
+            autocapitalize="characters"
+            style="text-transform:uppercase;letter-spacing:1px"
+          />
+        </div>
+
+        <!-- Neuf / Occasion -->
+        <div class="field-group">
+          <label class="field-label">État du véhicule</label>
+          <div class="condition-toggle">
+            <button class="cond-btn" id="btn-neuf" type="button">✨ Neuf</button>
+            <button class="cond-btn" id="btn-occasion" type="button">🔄 Occasion</button>
+          </div>
+        </div>
+
+        <!-- Cylindrée (moto seulement) -->
+        <div class="field-group" id="field-cylindree" style="display:none">
+          <label class="field-label" for="v-cylindree">Cylindrée</label>
+          <select id="v-cylindree" class="field-input">
+            <option value="">— Sélectionner —</option>
+            <option value="50cc">50cc</option>
+            <option value="100cc">100cc</option>
+            <option value="125cc">125cc</option>
+            <option value="150cc">150cc</option>
+            <option value="200cc">200cc</option>
+            <option value="250cc">250cc</option>
+            <option value="300cc+">300cc et plus</option>
+          </select>
+        </div>
+
+        <div class="vh-error" id="details-error"></div>
+
+        <button class="btn-vh" id="btn-next-details" disabled>
+          Suivant → Permis de conduire
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       ÉCRAN 3 — Permis de conduire
+  ══════════════════════════════════════ -->
+  <div id="screen-permis" class="vehicle-screen">
+    <div class="vehicle-content">
+
+      <button class="vh-back" id="btn-back-details">← Retour</button>
+
+      <div class="vh-hero" style="padding-top:16px;margin-bottom:12px">
+        <div class="vh-icon">🪪</div>
+        <div class="vh-title">Permis de conduire</div>
+        <div class="vh-subtitle">Vos informations de permis</div>
+      </div>
+
+      <div class="steps-indicator">
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot active"></div>
+      </div>
+
+      <div class="vh-card">
+
+        <!-- Pays de délivrance -->
+        <div class="field-group">
+          <label class="field-label" for="p-pays">Pays de délivrance</label>
+          <select id="p-pays" class="field-input">
+            <option value="">— Sélectionner —</option>
+            <option value="Congo (Brazzaville)">🇨🇬 Congo (Brazzaville)</option>
+            <option value="Congo (RDC)">🇨🇩 Congo (RDC)</option>
+            <option value="Gabon">🇬🇦 Gabon</option>
+            <option value="Cameroun">🇨🇲 Cameroun</option>
+            <option value="Centrafrique">🇨🇫 Centrafrique</option>
+            <option value="Angola">🇦🇴 Angola</option>
+            <option value="Guinée Équatoriale">🇬🇶 Guinée Équatoriale</option>
+            <option value="Tchad">🇹🇩 Tchad</option>
+            <option value="Côte d'Ivoire">🇨🇮 Côte d'Ivoire</option>
+            <option value="Sénégal">🇸🇳 Sénégal</option>
+            <option value="Mali">🇲🇱 Mali</option>
+            <option value="Bénin">🇧🇯 Bénin</option>
+            <option value="Burkina Faso">🇧🇫 Burkina Faso</option>
+            <option value="Guinée">🇬🇳 Guinée</option>
+            <option value="Nigeria">🇳🇬 Nigeria</option>
+            <option value="Ghana">🇬🇭 Ghana</option>
+            <option value="Togo">🇹🇬 Togo</option>
+            <option value="France">🇫🇷 France</option>
+            <option value="Belgique">🇧🇪 Belgique</option>
+            <option value="Autre">🌍 Autre</option>
+          </select>
+        </div>
+
+        <!-- Nom + Prénom -->
+        <div class="fields-row">
+          <div class="field-group">
+            <label class="field-label" for="p-nom">Nom</label>
+            <input type="text" id="p-nom" class="field-input"
+              placeholder="DUPONT" maxlength="30"
+              autocapitalize="characters" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="p-prenom">Prénom</label>
+            <input type="text" id="p-prenom" class="field-input"
+              placeholder="Jean" maxlength="30"
+              autocapitalize="words" />
+          </div>
+        </div>
+
+        <!-- Numéro de permis -->
+        <div class="field-group">
+          <label class="field-label" for="p-numero">Numéro du permis</label>
+          <input type="text" id="p-numero" class="field-input"
+            placeholder="ex : AB-123456"
+            maxlength="20"
+            autocapitalize="characters"
+            style="text-transform:uppercase;letter-spacing:1px"
+          />
+          <span class="field-hint" id="p-numero-hint">Lettres et chiffres, 5 à 20 caractères</span>
+        </div>
+
+        <!-- Date d'émission -->
+        <div class="field-group">
+          <label class="field-label" for="p-date">Date d'émission</label>
+          <input type="date" id="p-date" class="field-input" />
+        </div>
+
+        <!-- Photo de profil -->
+        <div class="field-group">
+          <label class="field-label">Photo de profil <span style="color:var(--text-muted);font-weight:400">(optionnel)</span></label>
+          <div class="avatar-picker" id="avatar-picker">
+            <div class="avatar-preview" id="avatar-preview">👤</div>
+            <div class="avatar-info">
+              <span class="avatar-label">Ajouter une photo</span>
+              <span class="avatar-hint">JPG ou PNG · max 2 Mo</span>
+            </div>
+            <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp" style="display:none" />
+          </div>
+        </div>
+
+        <!-- Photo du permis -->
+        <div class="field-group">
+          <label class="field-label">Photo du permis <span style="color:var(--red-dark);font-weight:600">*</span></label>
+          <div class="avatar-picker" id="permis-picker">
+            <div class="permis-preview" id="permis-preview">🪪</div>
+            <div class="avatar-info">
+              <span class="avatar-label" id="permis-picker-label">Ajouter une photo</span>
+              <span class="avatar-hint">Recto du permis · JPG ou PNG · max 5 Mo</span>
+            </div>
+            <input type="file" id="permis-file" accept="image/jpeg,image/png,image/webp" style="display:none" />
+          </div>
+        </div>
+
+        <div class="vh-error" id="permis-error"></div>
+
+        <button class="btn-vh" id="btn-save-all" disabled>
+          Terminer l'inscription ✓
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /vehicle-wrapper -->
+
+<script type="module">
+  import { supabase }         from './js/supabase-config.js';
+  import { getDriverSession } from './js/driver-auth.js';
+
+  const session = getDriverSession();
+  if (!session) window.location.replace('driver-auth.html?m=signup');
+
+  // ══════════════════════════════════════════════════════════════
+  //  Données marques / modèles
+  // ══════════════════════════════════════════════════════════════
+  const BRANDS_CAR = {
+    'Toyota'      : ['Corolla','Camry','Yaris','Hilux','Land Cruiser','RAV4','Fortuner','Prado','Avensis','Auris'],
+    'Hyundai'     : ['Accent','Elantra','Tucson','Santa Fe','i10','i20','i30','Creta','Sonata'],
+    'Kia'         : ['Rio','Picanto','Sportage','Sorento','Cerato','Soul','Stonic'],
+    'Renault'     : ['Logan','Sandero','Duster','Symbol','Clio','Megane','Koleos','Kwid'],
+    'Peugeot'     : ['206','207','208','301','308','405','406','407','504','508','2008','3008'],
+    'Citroën'     : ['C3','C4','C5','Berlingo','Xsara','Saxo'],
+    'Nissan'      : ['Micra','Almera','Tiida','Note','Patrol','Navara','X-Trail','Juke'],
+    'Mitsubishi'  : ['Colt','Lancer','Pajero','Outlander','L200','Galant','Eclipse Cross'],
+    'Honda'       : ['Civic','Accord','Jazz','CR-V','HR-V','City','Fit'],
+    'Suzuki'      : ['Swift','Alto','Baleno','Vitara','Ignis','Jimny','Ertiga'],
+    'Ford'        : ['Focus','Fiesta','Ka','EcoSport','Ranger','Transit','Mondeo'],
+    'Volkswagen'  : ['Polo','Golf','Passat','Tiguan','Jetta','Touareg'],
+    'Mercedes'    : ['Classe A','Classe C','Classe E','Classe S','GLA','GLC','Vito','Sprinter'],
+    'BMW'         : ['Série 1','Série 3','Série 5','X1','X3','X5'],
+    'Datsun'      : ['Go','Go+','Redi-GO'],
+    'Fiat'        : ['Punto','Palio','Siena','Bravo','500','Tipo'],
+    'Opel'        : ['Corsa','Astra','Insignia','Mokka','Zafira'],
+    'Isuzu'       : ['D-Max','MU-X','Trooper'],
+    'Chery'       : ['QQ','Arrizo 3','Arrizo 5','Tiggo 2','Tiggo 4','Tiggo 7'],
+    'BYD'         : ['F0','F3','F6','S6','Tang','Han'],
+    'Autre'       : ['Autre modèle'],
+  };
+
+  const BRANDS_MOTO = {
+    'Honda'       : ['CB125','CB150','CG125','CRF150','PCX125','Wave 110','Shine','XR150'],
+    'Yamaha'      : ['FZ-S','R15','MT-15','NMAX','Aerox','Crypton','YBR125','Saluto'],
+    'Suzuki'      : ['GS150','GD110','Gixxer','Hayate','Access 125','Burgman'],
+    'Bajaj'       : ['Boxer 100','Discover 100','Discover 125','Platina','Pulsar 135','Pulsar 150'],
+    'TVS'         : ['Apache RTR 150','Apache RTR 160','Star City','Star Sport','Radeon'],
+    'Lifan'       : ['LF150','LF200','KPR 150','KPT 200'],
+    'Jialing'     : ['JH70','JH110','JH125'],
+    'Kymco'       : ['Agility 125','Like 150','Downtown 300'],
+    'SYM'         : ['Orbit 125','Jet 14','Symphony 125'],
+    'Haojue'      : ['DR160','HJ125-8','Uoo 125'],
+    'Dayun'       : ['DY110','DY125','DY150'],
+    'Loncin'      : ['LX150','LX125','GP150'],
+    'Autre'       : ['Autre modèle'],
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  //  Navigation
+  // ══════════════════════════════════════════════════════════════
+  function goTo(id) {
+    document.querySelectorAll('.vehicle-screen').forEach(s => s.classList.remove('active'));
+    requestAnimationFrame(() => document.getElementById(id).classList.add('active'));
+  }
+
+  function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 4000);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  ÉCRAN 1 — Type de véhicule
+  // ══════════════════════════════════════════════════════════════
+  let selectedType      = null;
+  let selectedCondition = null;
+
+  const btnCar  = document.getElementById('btn-type-car');
+  const btnMoto = document.getElementById('btn-type-moto');
+  const btnNext = document.getElementById('btn-next-type');
+
+  function populateBrands(type) {
+    const brands  = type === 'car' ? BRANDS_CAR : BRANDS_MOTO;
+    const marqSel = document.getElementById('v-marque');
+    marqSel.innerHTML = '<option value="">— Sélectionner —</option>';
+    Object.keys(brands).forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b; opt.textContent = b;
+      marqSel.appendChild(opt);
+    });
+    document.getElementById('v-modele').innerHTML = '<option value="">— Choisir d\'abord une marque —</option>';
+    document.getElementById('v-modele').disabled  = true;
+  }
+
+  function selectType(type) {
+    selectedType = type;
+    btnCar.classList.toggle('selected',  type === 'car');
+    btnMoto.classList.toggle('selected', type === 'moto');
+    btnNext.disabled = false;
+
+    document.getElementById('details-icon').textContent  = type === 'car' ? '🚗' : '🏍️';
+    document.getElementById('details-title').textContent = type === 'car' ? 'Détails de votre voiture' : 'Détails de votre moto';
+    document.getElementById('field-cylindree').style.display = type === 'moto' ? '' : 'none';
+    populateBrands(type);
+  }
+
+  btnCar.addEventListener('click',  () => selectType('car'));
+  btnMoto.addEventListener('click', () => selectType('moto'));
+  btnNext.addEventListener('click', () => {
+    if (!selectedType) return;
+    goTo('screen-details');
+    checkDetailsReady();
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  ÉCRAN 2 — Détails du véhicule
+  // ══════════════════════════════════════════════════════════════
+  document.getElementById('btn-back-type').addEventListener('click', () => goTo('screen-type'));
+
+  // Marque → Modèle dynamique
+  document.getElementById('v-marque').addEventListener('change', function () {
+    const brands   = selectedType === 'car' ? BRANDS_CAR : BRANDS_MOTO;
+    const models   = brands[this.value] || [];
+    const modelSel = document.getElementById('v-modele');
+    modelSel.innerHTML = '<option value="">— Sélectionner —</option>';
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      modelSel.appendChild(opt);
+    });
+    modelSel.disabled = models.length === 0;
+    checkDetailsReady();
+  });
+
+  // Neuf / Occasion
+  document.getElementById('btn-neuf').addEventListener('click', () => {
+    selectedCondition = 'neuf';
+    document.getElementById('btn-neuf').classList.add('selected');
+    document.getElementById('btn-occasion').classList.remove('selected');
+    checkDetailsReady();
+  });
+  document.getElementById('btn-occasion').addEventListener('click', () => {
+    selectedCondition = 'occasion';
+    document.getElementById('btn-occasion').classList.add('selected');
+    document.getElementById('btn-neuf').classList.remove('selected');
+    checkDetailsReady();
+  });
+
+  const detailsRequired = ['v-marque', 'v-modele', 'v-couleur', 'v-plaque'];
+  const btnNextDetails  = document.getElementById('btn-next-details');
+
+  function checkDetailsReady() {
+    const filled = detailsRequired.every(id => {
+      const el = document.getElementById(id);
+      return el && el.value.trim().length > 0;
+    });
+    btnNextDetails.disabled = !filled || !selectedCondition;
+  }
+
+  detailsRequired.forEach(id => {
+    document.getElementById(id)?.addEventListener('change', checkDetailsReady);
+    document.getElementById(id)?.addEventListener('input',  checkDetailsReady);
+  });
+
+  btnNextDetails.addEventListener('click', () => {
+    goTo('screen-permis');
+    checkPermisReady();
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  ÉCRAN 3 — Permis de conduire
+  // ══════════════════════════════════════════════════════════════
+  document.getElementById('btn-back-details').addEventListener('click', () => goTo('screen-details'));
+
+  // Validation du numéro de permis : 5-20 car. alphanumériques + tirets
+  function validatePermisNumero(val) {
+    return /^[A-Z0-9\-]{5,20}$/i.test(val.trim());
+  }
+
+  const numeroInput = document.getElementById('p-numero');
+  const numeroHint  = document.getElementById('p-numero-hint');
+
+  numeroInput.addEventListener('input', () => {
+    const val   = numeroInput.value.trim();
+    const valid = validatePermisNumero(val);
+    numeroHint.textContent = val.length === 0
+      ? 'Lettres et chiffres, 5 à 20 caractères'
+      : valid
+        ? '✓ Format valide'
+        : '✗ Lettres, chiffres et tirets uniquement (5–20 car.)';
+    numeroHint.className = 'field-hint' + (val.length === 0 ? '' : valid ? ' ok' : ' err');
+    numeroInput.classList.toggle('invalid', val.length > 0 && !valid);
+    checkPermisReady();
+  });
+
+  const permisRequired = ['p-pays', 'p-nom', 'p-prenom', 'p-date'];
+  const btnSaveAll     = document.getElementById('btn-save-all');
+
+  function checkPermisReady() {
+    const filled = permisRequired.every(id => {
+      const el = document.getElementById(id);
+      return el && el.value.trim().length > 0;
+    });
+    const numeroOk = validatePermisNumero(document.getElementById('p-numero').value);
+
+    // Vérifier que la date n'est pas dans le futur
+    const dateVal = document.getElementById('p-date').value;
+    const dateOk  = dateVal && new Date(dateVal) <= new Date();
+
+    btnSaveAll.disabled = !filled || !numeroOk || !dateOk || !permisFile;
+  }
+
+  permisRequired.forEach(id => {
+    document.getElementById(id)?.addEventListener('change', checkPermisReady);
+    document.getElementById(id)?.addEventListener('input',  checkPermisReady);
+  });
+
+  // ── Avatar picker ──────────────────────────────────────────────
+  let avatarFile = null;
+
+  const avatarPicker  = document.getElementById('avatar-picker');
+  const avatarInput   = document.getElementById('avatar-file');
+  const avatarPreview = document.getElementById('avatar-preview');
+
+  avatarPicker.addEventListener('click', () => avatarInput.click());
+
+  avatarInput.addEventListener('change', () => {
+    const file = avatarInput.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showError('permis-error', 'La photo dépasse 2 Mo. Choisissez une image plus légère.');
+      return;
+    }
+    avatarFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      avatarPreview.innerHTML = `<img src="${e.target.result}" alt="avatar" />`;
+      avatarPicker.classList.add('has-photo');
+      avatarPicker.querySelector('.avatar-label').textContent = 'Photo sélectionnée ✓';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  async function uploadAvatar(telephone) {
+    if (!avatarFile) return null;
+    const ext  = avatarFile.name.split('.').pop();
+    const path = `drivers/${telephone}.${ext}`;
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type });
+    if (error) throw error;
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    return data.publicUrl;
+  }
+
+  // ── Photo du permis ────────────────────────────────────────────
+  let permisFile = null;
+
+  const permisPicker  = document.getElementById('permis-picker');
+  const permisInput   = document.getElementById('permis-file');
+  const permisPreview = document.getElementById('permis-preview');
+
+  permisPicker.addEventListener('click', () => permisInput.click());
+
+  permisInput.addEventListener('change', () => {
+    const file = permisInput.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showError('permis-error', 'La photo du permis dépasse 5 Mo. Choisissez une image plus légère.');
+      return;
+    }
+    permisFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      permisPreview.innerHTML = `<img src="${e.target.result}" alt="permis" />`;
+      permisPicker.classList.add('has-photo');
+      document.getElementById('permis-picker-label').textContent = 'Photo sélectionnée ✓';
+      checkPermisReady();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  async function uploadPermisPhoto(telephone) {
+    if (!permisFile) return null;
+    const ext  = permisFile.name.split('.').pop();
+    const path = `drivers/${telephone}_permis.${ext}`;
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(path, permisFile, { upsert: true, contentType: permisFile.type });
+    if (error) throw error;
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    return data.publicUrl;
+  }
+
+  // ── Sauvegarde finale ──────────────────────────────────────────
+  btnSaveAll.addEventListener('click', async () => {
+    const marque  = document.getElementById('v-marque').value;
+    const modele  = document.getElementById('v-modele').value;
+    const couleur = document.getElementById('v-couleur').value;
+    const plaque  = document.getElementById('v-plaque').value.trim().toUpperCase();
+    const cyl     = document.getElementById('v-cylindree').value || null;
+
+    const pays    = document.getElementById('p-pays').value;
+    const nom     = document.getElementById('p-nom').value.trim().toUpperCase();
+    const prenom  = document.getElementById('p-prenom').value.trim();
+    const numero  = document.getElementById('p-numero').value.trim().toUpperCase();
+    const date    = document.getElementById('p-date').value;
+
+    btnSaveAll.disabled    = true;
+    btnSaveAll.textContent = '…';
+
+    try {
+      const photoUrl      = await uploadAvatar(session.telephone);
+      const permisPhotoUrl = await uploadPermisPhoto(session.telephone);
+
+      const { error } = await supabase
+        .from('drivers')
+        .update({
+          // Véhicule
+          type_vehicule        : selectedType,
+          marque,
+          modele,
+          couleur,
+          immatriculation      : plaque,
+          etat_vehicule        : selectedCondition,
+          cylindree            : cyl,
+          // Permis
+          permis_pays          : pays,
+          permis_nom           : nom,
+          permis_prenom        : prenom,
+          permis_numero        : numero,
+          permis_date_emission : date,
+          // Photos
+          ...(photoUrl       ? { photo               : photoUrl       } : {}),
+          ...(permisPhotoUrl ? { permis_photo         : permisPhotoUrl } : {}),
+        })
+        .eq('telephone', session.telephone);
+
+      if (error) throw error;
+
+      window.location.replace('driver.html');
+
+    } catch (err) {
+      console.error(err);
+      showError('permis-error', `Erreur : ${err.message || 'Réessayez.'}`);
+      btnSaveAll.disabled    = false;
+      btnSaveAll.textContent = 'Terminer l\'inscription ✓';
+    }
+  });
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js')
+      .catch(err => console.warn('SW error:', err));
+  }
+</script>
+
+</body>
+</html>

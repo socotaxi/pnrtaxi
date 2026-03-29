@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="description" content="PNR Taxi — Connexion ou inscription" />
+  <title>PNR Taxi — Connexion</title>
+
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.json" />
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <link rel="stylesheet" href="css/style.css" />
+
+  <style>
+    /* ── Page standalone login — overrides ── */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* L'overlay occupe tout l'écran dès le départ */
+    #auth-overlay {
+      display: block !important;
+    }
+
+    /* Bouton retour landing */
+    .login-back {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.28);
+      border-radius: 10px;
+      color: white;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 7px 14px;
+      text-decoration: none;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      transition: background 0.2s;
+    }
+    .login-back:hover { background: rgba(255,255,255,0.28); }
+
+    /* Lien toggle login / signup */
+    .auth-mode-toggle {
+      width: 100%;
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.84rem;
+      color: rgba(255,255,255,0.75);
+    }
+    .auth-mode-toggle a {
+      color: white;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    /* ── Avatar picker passager ── */
+    .avatar-picker {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .avatar-picker:hover { border-color: var(--brand-500); background: var(--brand-50); }
+    .avatar-picker.has-photo { border-style: solid; border-color: var(--brand-600); background: var(--brand-50); }
+
+    .avatar-preview {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .avatar-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+    .avatar-info { display: flex; flex-direction: column; gap: 2px; }
+    .avatar-label { font-size: 0.86rem; font-weight: 600; color: var(--text-primary); }
+    .avatar-hint  { font-size: 0.73rem; color: var(--text-muted); }
+
+    /* Badge mode "Inscription" sur le logo */
+    .auth-mode-chip {
+      display: inline-block;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.28);
+      border-radius: 20px;
+      color: white;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 4px 12px;
+      margin-top: 10px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     AUTH OVERLAY — page autonome
+══════════════════════════════════════════ -->
+<div id="auth-overlay" class="auth-overlay">
+
+  <!-- ── ÉCRAN 1 : Numéro de téléphone ── -->
+  <div id="screen-phone" class="auth-screen active">
+
+    <!-- Retour landing -->
+    <a href="index.html" class="login-back">← Accueil</a>
+
+    <div class="auth-content">
+
+      <div class="auth-hero">
+        <div class="auth-logo-icon">🚖</div>
+        <div class="auth-brand">PNR Taxi</div>
+        <div class="auth-tagline">Pick aNd Ride</div>
+        <div class="auth-mode-chip" id="mode-chip">Connexion</div>
+      </div>
+
+      <div class="auth-card">
+        <h2 class="auth-title" id="screen-phone-title">Votre numéro de téléphone</h2>
+        <p class="auth-subtitle" id="screen-phone-subtitle">Entrez votre numéro pour recevoir un code de vérification</p>
+
+        <div class="phone-input-wrapper">
+          <select id="phone-prefix-select" class="phone-prefix-select">
+            <option value="242">🇨🇬 +242</option>
+            <option value="243">🇨🇩 +243</option>
+            <option value="241">🇬🇦 +241</option>
+            <option value="237">🇨🇲 +237</option>
+            <option value="236">🇨🇫 +236</option>
+            <option value="240">🇬🇶 +240</option>
+            <option value="235">🇹🇩 +235</option>
+            <option value="244">🇦🇴 +244</option>
+            <option value="229">🇧🇯 +229</option>
+            <option value="226">🇧🇫 +226</option>
+            <option value="225">🇨🇮 +225</option>
+            <option value="221">🇸🇳 +221</option>
+            <option value="223">🇲🇱 +223</option>
+            <option value="224">🇬🇳 +224</option>
+            <option value="234">🇳🇬 +234</option>
+            <option value="233">🇬🇭 +233</option>
+            <option value="228">🇹🇬 +228</option>
+            <option value="27">🇿🇦 +27</option>
+            <option value="254">🇰🇪 +254</option>
+            <option value="212">🇲🇦 +212</option>
+            <option value="213">🇩🇿 +213</option>
+            <option value="216">🇹🇳 +216</option>
+            <option value="20">🇪🇬 +20</option>
+            <option value="33">🇫🇷 +33</option>
+            <option value="32">🇧🇪 +32</option>
+            <option value="41">🇨🇭 +41</option>
+            <option value="44">🇬🇧 +44</option>
+            <option value="1">🇺🇸 +1</option>
+            <option value="351">🇵🇹 +351</option>
+            <option value="34">🇪🇸 +34</option>
+          </select>
+          <input
+            type="tel"
+            id="auth-phone-input"
+            class="phone-digits"
+            placeholder="06 000 00 00"
+            maxlength="12"
+            inputmode="numeric"
+            autocomplete="tel"
+          />
+        </div>
+
+        <div class="auth-error" id="phone-error"></div>
+
+        <button class="btn-auth" id="btn-send-otp" disabled>
+          Recevoir le code
+        </button>
+      </div>
+
+      <!-- Séparateur -->
+      <div class="auth-or-divider"><span>ou</span></div>
+
+      <!-- Connexion Google -->
+      <button class="btn-oauth" id="btn-oauth-google">
+        <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+        </svg>
+        Continuer avec Google
+      </button>
+
+      <!-- Connexion Facebook -->
+      <button class="btn-oauth" id="btn-oauth-facebook">
+        <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.235 2.686.235v2.97h-1.513c-1.491 0-1.956.93-1.956 1.883v2.255h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" fill="#1877F2"/>
+        </svg>
+        Continuer avec Facebook
+      </button>
+
+      <!-- Toggle login / signup -->
+      <p class="auth-mode-toggle" id="auth-mode-toggle"></p>
+
+      <p class="auth-legal">
+        En continuant, vous acceptez nos
+        <a href="conditions.html">conditions d'utilisation</a>
+      </p>
+
+    </div>
+  </div>
+
+  <!-- ── ÉCRAN 2 : Code OTP ── -->
+  <div id="screen-otp" class="auth-screen">
+    <div class="auth-content">
+
+      <button class="auth-back" id="btn-back-phone">← Retour</button>
+
+      <div class="auth-hero" style="margin-top:48px">
+        <div class="auth-logo-icon">🔐</div>
+      </div>
+
+      <div class="auth-card">
+        <h2 class="auth-title">Code de vérification</h2>
+        <p class="auth-subtitle" id="otp-subtitle">Envoyé au +242 XX XXX XX XX</p>
+
+        <div class="otp-boxes">
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
+          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
+        </div>
+
+        <div class="otp-timer" id="otp-timer">⏱ 05:00</div>
+        <button class="otp-resend" id="btn-resend" disabled>Renvoyer le code</button>
+
+        <div class="demo-badge">
+          <span class="demo-badge-icon">💡</span>
+          <span>Mode démo — votre code : <strong id="demo-code">----</strong></span>
+        </div>
+
+        <div class="auth-error" id="otp-error"></div>
+
+        <button class="btn-auth" id="btn-verify-otp" disabled>Vérifier</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ÉCRAN 3 : Prénom ── -->
+  <div id="screen-name" class="auth-screen">
+    <div class="auth-content">
+
+      <div class="auth-hero" style="margin-top:60px">
+        <div class="verified-chip">✅ Numéro vérifié</div>
+        <div class="auth-logo-icon" style="margin-top:24px">👋</div>
+        <div class="auth-brand">Bienvenue !</div>
+      </div>
+
+      <div class="auth-card">
+        <h2 class="auth-title">Comment vous appelez-vous ?</h2>
+        <p class="auth-subtitle">Vos nom et prénom seront affichés dans l'application</p>
+
+        <input
+          type="text"
+          id="prenom-input"
+          class="name-input"
+          placeholder="Prénom"
+          maxlength="30"
+          autocomplete="given-name"
+          autocapitalize="words"
+        />
+
+        <input
+          type="text"
+          id="nom-input"
+          class="name-input"
+          placeholder="Nom de famille"
+          maxlength="30"
+          autocomplete="family-name"
+          autocapitalize="words"
+        />
+
+        <!-- Photo de profil -->
+        <div class="avatar-picker" id="avatar-picker">
+          <div class="avatar-preview" id="avatar-preview">👤</div>
+          <div class="avatar-info">
+            <span class="avatar-label">Photo de profil</span>
+            <span class="avatar-hint">Optionnel · JPG ou PNG · max 2 Mo</span>
+          </div>
+          <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp" style="display:none" />
+        </div>
+
+        <div class="auth-error" id="name-error"></div>
+
+        <button class="btn-auth" id="btn-save-name" disabled>
+          Commencer 🚖
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /auth-overlay -->
+
+<script type="module">
+  import { initAuth, getSession } from './js/auth.js';
+
+  // ── Mode login vs signup ─────────────────────────────────────
+  const params  = new URLSearchParams(location.search);
+  const isSignup = params.get('m') === 'signup';
+
+  const chip     = document.getElementById('mode-chip');
+  const toggle   = document.getElementById('auth-mode-toggle');
+  const titleEl  = document.getElementById('screen-phone-title');
+  const subEl    = document.getElementById('screen-phone-subtitle');
+  const pageTitle = document.querySelector('title');
+
+  if (isSignup) {
+    chip.textContent       = 'Inscription';
+    titleEl.textContent    = 'Créer votre compte';
+    subEl.textContent      = 'Entrez votre numéro pour recevoir un code d\'activation';
+    pageTitle.textContent  = 'PNR Taxi — Créer un compte';
+    toggle.innerHTML       = 'Déjà un compte ? <a href="login.html">Se connecter</a>';
+  } else {
+    chip.textContent    = 'Connexion';
+    toggle.innerHTML    = 'Pas encore de compte ? <a href="login.html?m=signup">Créer un compte gratuit</a>';
+  }
+
+  // ── Auth — redirige vers l'app au succès ─────────────────────
+  initAuth(() => {
+    window.location.replace('passenger.html');
+  });
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js')
+      .catch(err => console.warn('SW error:', err));
+  }
+</script>
+
+</body>
+</html>

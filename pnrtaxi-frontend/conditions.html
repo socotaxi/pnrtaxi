@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conditions d'utilisation — PNR Taxi</title>
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand-50:  #eef2ff;
+      --brand-100: #e0e7ff;
+      --brand-600: #4f46e5;
+      --brand-700: #4338ca;
+      --bg-secondary: #f9fafb;
+      --bg-primary:   #ffffff;
+      --text-primary: #111827;
+      --text-muted:   #6b7280;
+      --border: #e5e7eb;
+      --radius: 14px;
+      --shadow: 0 4px 6px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    /* ── Header ── */
+    .cgu-header {
+      background: linear-gradient(135deg, var(--brand-600) 0%, #6366f1 100%);
+      color: #fff;
+      padding: 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(79,70,229,0.3);
+    }
+    .cgu-header-inner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 20px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .cgu-back {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .cgu-back:hover { background: rgba(255,255,255,0.25); }
+    .cgu-header-title { font-size: 1.05rem; font-weight: 700; }
+    .cgu-header-sub   { font-size: 0.75rem; opacity: 0.8; margin-top: 1px; }
+
+    /* ── Hero banner ── */
+    .cgu-hero {
+      background: linear-gradient(135deg, var(--brand-600) 0%, #6366f1 100%);
+      color: #fff;
+      text-align: center;
+      padding: 40px 24px 48px;
+    }
+    .cgu-hero-icon  { font-size: 3rem; margin-bottom: 12px; }
+    .cgu-hero h1    { font-size: 1.5rem; font-weight: 800; margin-bottom: 6px; }
+    .cgu-hero p     { font-size: 0.88rem; opacity: 0.85; max-width: 340px; margin: 0 auto; }
+    .cgu-hero-date  {
+      display: inline-block;
+      margin-top: 14px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+
+    /* ── Contenu ── */
+    .cgu-body {
+      max-width: 760px;
+      margin: -24px auto 40px;
+      padding: 0 16px;
+    }
+
+    /* ── Table des matières ── */
+    .cgu-toc {
+      background: var(--bg-primary);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px 22px;
+      margin-bottom: 20px;
+    }
+    .cgu-toc-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .cgu-toc ol {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cgu-toc li a {
+      color: var(--brand-600);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+    .cgu-toc li a:hover { text-decoration: underline; }
+
+    /* ── Carte article ── */
+    .cgu-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px 22px;
+      margin-bottom: 16px;
+    }
+
+    .cgu-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cgu-card-num {
+      background: var(--brand-50);
+      color: var(--brand-600);
+      font-size: 0.78rem;
+      font-weight: 700;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .cgu-card-icon {
+      font-size: 1.35rem;
+      flex-shrink: 0;
+    }
+    .cgu-card h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* ── Typographie interne ── */
+    .cgu-card p {
+      font-size: 0.9rem;
+      color: #374151;
+      margin-bottom: 10px;
+    }
+    .cgu-card p:last-child { margin-bottom: 0; }
+
+    .cgu-card h3 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 14px 0 6px;
+    }
+
+    .cgu-card ul, .cgu-card ol {
+      padding-left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .cgu-card li {
+      font-size: 0.88rem;
+      color: #374151;
+    }
+    .cgu-card li::marker { color: var(--brand-600); }
+
+    /* ── Blocs spéciaux ── */
+    .cgu-highlight {
+      background: var(--brand-50);
+      border-left: 3px solid var(--brand-600);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 14px;
+      margin: 12px 0;
+      font-size: 0.88rem;
+      color: #3730a3;
+      font-weight: 500;
+    }
+    .cgu-warning {
+      background: #fffbeb;
+      border-left: 3px solid #f59e0b;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 14px;
+      margin: 12px 0;
+      font-size: 0.88rem;
+      color: #92400e;
+    }
+    .cgu-danger {
+      background: #fef2f2;
+      border-left: 3px solid #ef4444;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 14px;
+      margin: 12px 0;
+      font-size: 0.88rem;
+      color: #991b1b;
+    }
+
+    /* ── Badge ── */
+    .cgu-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--brand-50);
+      color: var(--brand-600);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+    }
+
+    /* ── Contact card ── */
+    .cgu-contact {
+      background: linear-gradient(135deg, var(--brand-600) 0%, #6366f1 100%);
+      border-radius: var(--radius);
+      padding: 24px 22px;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .cgu-contact h2   { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; }
+    .cgu-contact p    { font-size: 0.88rem; opacity: 0.9; margin-bottom: 16px; }
+    .cgu-contact-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .cgu-contact-item {
+      background: rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 12px 10px;
+      font-size: 0.82rem;
+    }
+    .cgu-contact-item strong { display: block; font-size: 0.75rem; opacity: 0.75; margin-bottom: 3px; }
+
+    /* ── Footer ── */
+    .cgu-footer {
+      text-align: center;
+      padding: 16px 20px 32px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .cgu-footer a { color: var(--brand-600); text-decoration: none; }
+
+    /* ── Btn retour bas ── */
+    .cgu-btn-back {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      background: var(--brand-600);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      margin-bottom: 20px;
+      transition: background 0.2s, transform 0.15s;
+      box-shadow: 0 4px 14px rgba(79,70,229,0.35);
+    }
+    .cgu-btn-back:hover  { background: var(--brand-700); }
+    .cgu-btn-back:active { transform: scale(0.98); }
+  </style>
+</head>
+<body>
+
+<!-- ── Header sticky ── -->
+<header class="cgu-header">
+  <div class="cgu-header-inner">
+    <button class="cgu-back" onclick="history.back()" aria-label="Retour">←</button>
+    <div>
+      <div class="cgu-header-title">Conditions d'utilisation</div>
+      <div class="cgu-header-sub">PNR Taxi · Pointe-Noire, Congo</div>
+    </div>
+  </div>
+</header>
+
+<!-- ── Hero ── -->
+<div class="cgu-hero">
+  <div class="cgu-hero-icon">📋</div>
+  <h1>Conditions d'utilisation</h1>
+  <p>Veuillez lire attentivement ces conditions avant d'utiliser l'application PNR Taxi.</p>
+  <span class="cgu-hero-date">Dernière mise à jour : 28 mars 2026</span>
+</div>
+
+<!-- ── Corps ── -->
+<div class="cgu-body">
+
+  <!-- Table des matières -->
+  <div class="cgu-toc">
+    <div class="cgu-toc-title">Table des matières</div>
+    <ol>
+      <li><a href="#art1">Présentation et objet</a></li>
+      <li><a href="#art2">Inscription et compte utilisateur</a></li>
+      <li><a href="#art3">Description du service</a></li>
+      <li><a href="#art4">Obligations du passager</a></li>
+      <li><a href="#art5">Obligations du chauffeur</a></li>
+      <li><a href="#art6">Tarifs et paiement</a></li>
+      <li><a href="#art7">Responsabilités et limitations</a></li>
+      <li><a href="#art8">Protection des données personnelles</a></li>
+      <li><a href="#art9">Propriété intellectuelle</a></li>
+      <li><a href="#art10">Suspension et résiliation</a></li>
+      <li><a href="#art11">Modification des conditions</a></li>
+      <li><a href="#art12">Droit applicable et litiges</a></li>
+    </ol>
+  </div>
+
+  <!-- Art. 1 -->
+  <div class="cgu-card" id="art1">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">01</div>
+      <div class="cgu-card-icon">🏢</div>
+      <h2>Présentation et objet</h2>
+    </div>
+    <p>
+      <strong>PNR Taxi</strong> (Pick aNd Ride) est une application mobile de mise en relation entre
+      des passagers et des chauffeurs de taxi agréés opérant dans la ville de
+      <strong>Pointe-Noire, République du Congo</strong>.
+    </p>
+    <p>
+      L'application est éditée et exploitée par la société <strong>PNR Taxi SARL</strong>,
+      dont le siège social est situé à Pointe-Noire, Congo. Pour toute question relative
+      aux présentes conditions, vous pouvez nous contacter à l'adresse :
+      <strong>contact@pnrtaxi.cg</strong>.
+    </p>
+    <div class="cgu-highlight">
+      Les présentes Conditions Générales d'Utilisation (CGU) régissent l'ensemble des relations
+      entre PNR Taxi et ses utilisateurs (passagers et chauffeurs). En utilisant l'application,
+      vous acceptez sans réserve les présentes CGU.
+    </div>
+    <p>
+      PNR Taxi agit exclusivement en qualité d'intermédiaire technique et ne fournit pas
+      directement de prestations de transport. Les trajets sont assurés par des chauffeurs
+      indépendants ou des sociétés de taxi partenaires.
+    </p>
+  </div>
+
+  <!-- Art. 2 -->
+  <div class="cgu-card" id="art2">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">02</div>
+      <div class="cgu-card-icon">👤</div>
+      <h2>Inscription et compte utilisateur</h2>
+    </div>
+
+    <h3>2.1 Conditions d'accès</h3>
+    <p>L'utilisation de PNR Taxi est réservée aux personnes :</p>
+    <ul>
+      <li>Âgées d'au moins <strong>16 ans</strong> ;</li>
+      <li>Disposant d'un numéro de téléphone valide ou d'un compte Google / Facebook actif ;</li>
+      <li>Résidant ou se trouvant sur le territoire de la République du Congo.</li>
+    </ul>
+
+    <h3>2.2 Création du compte</h3>
+    <p>
+      L'inscription peut se faire par <strong>numéro de téléphone</strong> (avec code OTP)
+      ou via <strong>Google / Facebook</strong>. En vous inscrivant, vous garantissez que
+      les informations fournies sont exactes, complètes et à jour.
+    </p>
+
+    <h3>2.3 Sécurité du compte</h3>
+    <div class="cgu-warning">
+      Vous êtes seul responsable de la confidentialité de votre compte. Toute utilisation
+      de votre compte par un tiers de votre fait engage votre responsabilité. Signalez
+      immédiatement toute utilisation non autorisée à contact@pnrtaxi.cg.
+    </div>
+
+    <h3>2.4 Unicité du compte</h3>
+    <p>
+      Chaque utilisateur ne peut détenir qu'un seul compte passager. La création de comptes
+      multiples dans le but de contourner une suspension est strictement interdite.
+    </p>
+  </div>
+
+  <!-- Art. 3 -->
+  <div class="cgu-card" id="art3">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">03</div>
+      <div class="cgu-card-icon">🚖</div>
+      <h2>Description du service</h2>
+    </div>
+    <p>
+      L'application PNR Taxi met à disposition des utilisateurs les fonctionnalités suivantes :
+    </p>
+    <ul>
+      <li>Visualisation en temps réel des chauffeurs disponibles sur la carte ;</li>
+      <li>Consultation des informations du chauffeur (nom, véhicule, immatriculation) ;</li>
+      <li>Mise en relation directe par <strong>WhatsApp ou appel téléphonique</strong> ;</li>
+      <li>Géolocalisation du passager pour faciliter la prise en charge ;</li>
+      <li>Accès à l'espace chauffeur pour les professionnels enregistrés.</li>
+    </ul>
+    <div class="cgu-highlight">
+      PNR Taxi est un service de mise en relation. La négociation du tarif et les modalités
+      du trajet sont convenues directement entre le passager et le chauffeur.
+    </div>
+    <p>
+      Le service est disponible <strong>7j/7, 24h/24</strong>, sous réserve de maintenance
+      planifiée ou de force majeure. PNR Taxi ne garantit pas la disponibilité permanente
+      d'un chauffeur dans votre zone.
+    </p>
+  </div>
+
+  <!-- Art. 4 -->
+  <div class="cgu-card" id="art4">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">04</div>
+      <div class="cgu-card-icon">🧍</div>
+      <h2>Obligations du passager</h2>
+    </div>
+
+    <h3>4.1 Utilisation conforme</h3>
+    <p>Le passager s'engage à utiliser l'application de manière loyale et conforme aux lois
+    congolaises en vigueur. Il est interdit :</p>
+    <ul>
+      <li>D'utiliser l'application à des fins illégales ou frauduleuses ;</li>
+      <li>De harceler, menacer ou insulter un chauffeur ;</li>
+      <li>De communiquer de fausses informations de localisation ;</li>
+      <li>De solliciter un chauffeur sans intention réelle d'effectuer un trajet ;</li>
+      <li>D'endommager le véhicule du chauffeur sous quelque forme que ce soit.</li>
+    </ul>
+
+    <h3>4.2 Comportement dans le véhicule</h3>
+    <p>Durant le trajet, le passager doit :</p>
+    <ul>
+      <li>Attacher sa ceinture de sécurité dès que disponible ;</li>
+      <li>Respecter l'équipement et la propreté du véhicule ;</li>
+      <li>Ne pas consommer d'alcool ou de substances illicites ;</li>
+      <li>Respecter le chauffeur et les autres passagers le cas échéant.</li>
+    </ul>
+
+    <div class="cgu-danger">
+      Tout dommage causé au véhicule par le passager engagera sa responsabilité civile.
+      Le passager pourra être tenu de rembourser les frais de réparation ou de nettoyage.
+    </div>
+
+    <h3>4.3 Ponctualité</h3>
+    <p>
+      Le passager s'engage à être présent au point de prise en charge convenu dans un
+      délai raisonnable. En cas d'absence prolongée sans prévenir, le chauffeur est en
+      droit d'annuler la course.
+    </p>
+  </div>
+
+  <!-- Art. 5 -->
+  <div class="cgu-card" id="art5">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">05</div>
+      <div class="cgu-card-icon">🚕</div>
+      <h2>Obligations du chauffeur</h2>
+    </div>
+    <p>
+      Les chauffeurs référencés sur PNR Taxi s'engagent à respecter un cahier des charges
+      strict comprenant :
+    </p>
+    <ul>
+      <li>Disposer d'un <strong>permis de conduire valide</strong> et d'une autorisation de taxi en cours de validité ;</li>
+      <li>Maintenir leur véhicule en bon état de marche, propre et sécurisé ;</li>
+      <li>Mettre à jour leur <strong>disponibilité en temps réel</strong> dans l'application ;</li>
+      <li>Adopter un comportement professionnel et courtois envers les passagers ;</li>
+      <li>Respecter le code de la route congolais en toutes circonstances ;</li>
+      <li>Ne pas accepter de courses sous l'influence de l'alcool ou de substances psychoactives ;</li>
+      <li>Fournir des informations exactes (plaque, véhicule, photo) sur leur profil.</li>
+    </ul>
+    <div class="cgu-highlight">
+      Tout manquement grave à ces obligations peut entraîner la suspension immédiate
+      du compte chauffeur sur la plateforme.
+    </div>
+  </div>
+
+  <!-- Art. 6 -->
+  <div class="cgu-card" id="art6">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">06</div>
+      <div class="cgu-card-icon">💰</div>
+      <h2>Tarifs et paiement</h2>
+    </div>
+
+    <h3>6.1 Fixation du prix</h3>
+    <p>
+      Les tarifs des courses sont fixés librement par les chauffeurs en accord avec les
+      usages locaux et la réglementation en vigueur à Pointe-Noire. PNR Taxi n'impose
+      aucun tarif et n'intervient pas dans la négociation entre le passager et le chauffeur.
+    </p>
+
+    <h3>6.2 Modalités de paiement</h3>
+    <p>Le paiement des courses s'effectue directement entre le passager et le chauffeur,
+    selon les modalités convenues :</p>
+    <ul>
+      <li>Espèces (francs CFA) ;</li>
+      <li>Mobile Money (MTN, Airtel Money) ;</li>
+      <li>Tout autre moyen convenu entre les parties.</li>
+    </ul>
+
+    <h3>6.3 Utilisation gratuite de l'application</h3>
+    <div class="cgu-highlight">
+      L'accès et l'utilisation de l'application PNR Taxi sont entièrement gratuits
+      pour les passagers. Aucun frais de service ni commission n'est prélevé
+      sur les courses.
+    </div>
+
+    <h3>6.4 Litiges tarifaires</h3>
+    <p>
+      Tout litige relatif au tarif d'une course doit être réglé directement avec le
+      chauffeur. PNR Taxi ne peut être tenu responsable des désaccords tarifaires entre
+      les parties.
+    </p>
+  </div>
+
+  <!-- Art. 7 -->
+  <div class="cgu-card" id="art7">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">07</div>
+      <div class="cgu-card-icon">⚖️</div>
+      <h2>Responsabilités et limitations</h2>
+    </div>
+
+    <h3>7.1 Rôle d'intermédiaire</h3>
+    <p>
+      PNR Taxi est une plateforme de mise en relation. En aucun cas, PNR Taxi ne peut
+      être considéré comme un prestataire de transport. Les chauffeurs opèrent en qualité
+      d'indépendants ou sous une entité juridique distincte.
+    </p>
+
+    <h3>7.2 Limitation de responsabilité</h3>
+    <p>PNR Taxi décline toute responsabilité en cas de :</p>
+    <ul>
+      <li>Accident survenu durant un trajet ;</li>
+      <li>Vol, perte ou détérioration d'objets personnels dans le véhicule ;</li>
+      <li>Retard ou annulation d'une course ;</li>
+      <li>Comportement inapproprié d'un chauffeur ou d'un passager ;</li>
+      <li>Interruption temporaire du service pour cause de maintenance ou force majeure ;</li>
+      <li>Inexactitude des informations de géolocalisation.</li>
+    </ul>
+
+    <div class="cgu-warning">
+      Il appartient à chaque utilisateur de souscrire les assurances appropriées pour
+      couvrir les risques liés à l'utilisation de l'application et aux déplacements.
+    </div>
+
+    <h3>7.3 Force majeure</h3>
+    <p>
+      PNR Taxi ne pourra être tenu responsable en cas d'inexécution de ses obligations
+      résultant d'un événement de force majeure tel que : catastrophe naturelle, panne
+      générale de réseau, émeutes, décision gouvernementale, pandémie ou tout autre
+      événement imprévisible et irrésistible.
+    </p>
+  </div>
+
+  <!-- Art. 8 -->
+  <div class="cgu-card" id="art8">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">08</div>
+      <div class="cgu-card-icon">🔒</div>
+      <h2>Protection des données personnelles</h2>
+    </div>
+
+    <h3>8.1 Données collectées</h3>
+    <p>Dans le cadre de l'utilisation de l'application, PNR Taxi collecte les données
+    suivantes :</p>
+    <ul>
+      <li><strong>Numéro de téléphone</strong> ou <strong>adresse e-mail</strong> (selon le mode d'inscription) ;</li>
+      <li><strong>Prénom</strong> de l'utilisateur ;</li>
+      <li><strong>Données de géolocalisation</strong> (position en temps réel, uniquement lors de l'utilisation de la carte) ;</li>
+      <li>Informations transmises par Google ou Facebook lors d'une connexion OAuth (nom, e-mail, photo de profil).</li>
+    </ul>
+
+    <h3>8.2 Finalités du traitement</h3>
+    <p>Vos données sont utilisées exclusivement pour :</p>
+    <ul>
+      <li>Authentifier et identifier l'utilisateur ;</li>
+      <li>Permettre la mise en relation avec les chauffeurs ;</li>
+      <li>Améliorer les performances et la qualité du service ;</li>
+      <li>Vous contacter en cas de besoin lié à l'utilisation du service.</li>
+    </ul>
+
+    <div class="cgu-highlight">
+      PNR Taxi ne vend et ne loue jamais vos données personnelles à des tiers.
+      Vos informations ne sont pas utilisées à des fins publicitaires.
+    </div>
+
+    <h3>8.3 Conservation des données</h3>
+    <p>
+      Vos données sont conservées pendant la durée d'activité de votre compte,
+      et jusqu'à <strong>3 ans</strong> après votre dernière connexion conformément
+      aux obligations légales en vigueur.
+    </p>
+
+    <h3>8.4 Vos droits</h3>
+    <p>Conformément aux lois applicables, vous disposez des droits suivants :</p>
+    <ul>
+      <li><strong>Droit d'accès</strong> : consulter vos données personnelles ;</li>
+      <li><strong>Droit de rectification</strong> : corriger des informations inexactes ;</li>
+      <li><strong>Droit à l'effacement</strong> : demander la suppression de votre compte ;</li>
+      <li><strong>Droit d'opposition</strong> : vous opposer au traitement de vos données.</li>
+    </ul>
+    <p>Pour exercer ces droits, contactez-nous à : <strong>privacy@pnrtaxi.cg</strong></p>
+
+    <h3>8.5 Géolocalisation</h3>
+    <div class="cgu-warning">
+      La géolocalisation n'est activée que lorsque vous utilisez activement la carte.
+      L'application ne collecte pas votre position en arrière-plan. Vous pouvez révoquer
+      l'accès à la localisation à tout moment depuis les paramètres de votre appareil.
+    </div>
+  </div>
+
+  <!-- Art. 9 -->
+  <div class="cgu-card" id="art9">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">09</div>
+      <div class="cgu-card-icon">©️</div>
+      <h2>Propriété intellectuelle</h2>
+    </div>
+    <p>
+      L'ensemble des éléments constituant l'application PNR Taxi — logo, charte graphique,
+      interface, textes, icônes, code source — sont la propriété exclusive de
+      <strong>PNR Taxi SARL</strong> et sont protégés par les lois relatives à la propriété
+      intellectuelle applicables en République du Congo et à l'international.
+    </p>
+    <p>
+      Toute reproduction, représentation, modification, publication ou transmission de ces
+      éléments, totale ou partielle, sans autorisation écrite préalable de PNR Taxi,
+      est strictement interdite et constitue une contrefaçon.
+    </p>
+    <div class="cgu-highlight">
+      Les marques, logos et signes distinctifs reproduits dans l'application sont la
+      propriété de leurs détenteurs respectifs. Leur mention ne confère aucun droit
+      à l'utilisateur.
+    </div>
+  </div>
+
+  <!-- Art. 10 -->
+  <div class="cgu-card" id="art10">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">10</div>
+      <div class="cgu-card-icon">🚫</div>
+      <h2>Suspension et résiliation</h2>
+    </div>
+
+    <h3>10.1 Résiliation par l'utilisateur</h3>
+    <p>
+      Tout utilisateur peut supprimer son compte à tout moment en contactant
+      <strong>contact@pnrtaxi.cg</strong>. La suppression entraîne l'effacement
+      des données personnelles dans un délai de <strong>30 jours</strong>.
+    </p>
+
+    <h3>10.2 Suspension par PNR Taxi</h3>
+    <p>PNR Taxi se réserve le droit de suspendre ou de résilier un compte, sans préavis
+    ni indemnité, dans les cas suivants :</p>
+    <ul>
+      <li>Non-respect des présentes CGU ;</li>
+      <li>Utilisation frauduleuse ou abusive de l'application ;</li>
+      <li>Comportement menaçant, harcelant ou violent envers un autre utilisateur ;</li>
+      <li>Fourniture de fausses informations lors de l'inscription ;</li>
+      <li>Plainte grave et fondée d'un chauffeur ou d'un tiers ;</li>
+      <li>Décision judiciaire ou administrative.</li>
+    </ul>
+
+    <div class="cgu-danger">
+      En cas de suspension pour faute grave, l'utilisateur ne sera pas autorisé à
+      recréer un nouveau compte. PNR Taxi se réserve le droit de transmettre les
+      informations aux autorités compétentes si nécessaire.
+    </div>
+  </div>
+
+  <!-- Art. 11 -->
+  <div class="cgu-card" id="art11">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">11</div>
+      <div class="cgu-card-icon">📝</div>
+      <h2>Modification des conditions</h2>
+    </div>
+    <p>
+      PNR Taxi se réserve le droit de modifier les présentes CGU à tout moment,
+      notamment pour s'adapter aux évolutions légales, réglementaires ou techniques.
+    </p>
+    <p>
+      Les utilisateurs seront informés de toute modification substantielle par une
+      notification dans l'application ou par e-mail, au moins <strong>15 jours</strong>
+      avant l'entrée en vigueur des nouvelles conditions.
+    </p>
+    <div class="cgu-highlight">
+      La poursuite de l'utilisation de l'application après notification vaut acceptation
+      des nouvelles conditions. En cas de désaccord, l'utilisateur peut supprimer son compte.
+    </div>
+  </div>
+
+  <!-- Art. 12 -->
+  <div class="cgu-card" id="art12">
+    <div class="cgu-card-header">
+      <div class="cgu-card-num">12</div>
+      <div class="cgu-card-icon">🏛️</div>
+      <h2>Droit applicable et litiges</h2>
+    </div>
+
+    <h3>12.1 Droit applicable</h3>
+    <p>
+      Les présentes CGU sont régies par le droit de la <strong>République du Congo</strong>.
+      Toute question non couverte par les présentes conditions sera soumise aux lois
+      et réglementations congolaises en vigueur.
+    </p>
+
+    <h3>12.2 Résolution amiable</h3>
+    <p>
+      En cas de litige, l'utilisateur est invité à contacter PNR Taxi en premier lieu
+      afin de trouver une solution amiable à l'adresse <strong>contact@pnrtaxi.cg</strong>.
+      PNR Taxi s'engage à répondre dans un délai de <strong>7 jours ouvrés</strong>.
+    </p>
+
+    <h3>12.3 Juridiction compétente</h3>
+    <p>
+      À défaut de résolution amiable, tout litige relatif à l'interprétation ou
+      à l'exécution des présentes CGU sera soumis à la compétence exclusive des
+      <strong>tribunaux de Pointe-Noire</strong>, République du Congo.
+    </p>
+  </div>
+
+  <!-- Contact -->
+  <div class="cgu-contact">
+    <h2>📬 Nous contacter</h2>
+    <p>Une question sur ces conditions ? Notre équipe est disponible.</p>
+    <div class="cgu-contact-grid">
+      <div class="cgu-contact-item">
+        <strong>E-mail général</strong>
+        contact@pnrtaxi.cg
+      </div>
+      <div class="cgu-contact-item">
+        <strong>Données personnelles</strong>
+        privacy@pnrtaxi.cg
+      </div>
+      <div class="cgu-contact-item">
+        <strong>Siège social</strong>
+        Pointe-Noire, Congo
+      </div>
+      <div class="cgu-contact-item">
+        <strong>Disponibilité</strong>
+        Lun – Sam, 8h – 18h
+      </div>
+    </div>
+  </div>
+
+  <!-- Bouton retour -->
+  <a href="passenger.html" class="cgu-btn-back">← Retour à l'application</a>
+
+</div><!-- /cgu-body -->
+
+<footer class="cgu-footer">
+  © 2026 PNR Taxi SARL · Pointe-Noire, République du Congo<br/>
+  <a href="passenger.html">Accueil</a> · <a href="mailto:contact@pnrtaxi.cg">Contact</a>
+</footer>
+
+</body>
+</html>

@@ -1,15 +1,21 @@
 {
-  "name": "Taxi Pointe-Noire",
-  "short_name": "TaxiPNR",
-  "description": "Trouvez un taxi à Pointe-Noire en temps réel",
-  "start_url": "/index.html",
+  "name": "PNR Taxi",
+  "short_name": "PNR Taxi",
+  "description": "Pick aNd Ride — Trouvez votre taxi instantanément",
+  "start_url": "/passenger.html",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#1a1a2e",
-  "background_color": "#1a1a2e",
+  "theme_color": "#1A9BC5",
+  "background_color": "#1A9BC5",
   "lang": "fr",
   "categories": ["transportation", "utilities"],
   "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
@@ -29,6 +35,14 @@
       "short_name": "Chauffeur",
       "url": "/driver.html",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow"
     }
   ]
 }

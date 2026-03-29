@@ -4,7 +4,7 @@
 //              Network Only pour les données Supabase
 // ============================================================
 
-const CACHE_NAME   = 'taxi-pnr-v2';
+const CACHE_NAME   = 'taxi-pnr-v3';
 const CACHE_URLS   = [
   '/',
   '/index.html',
@@ -55,6 +55,9 @@ self.addEventListener('activate', (event) => {
 
 // ── Fetch : stratégie hybride ─────────────────────────────────
 self.addEventListener('fetch', (event) => {
+  // Ignorer tout ce qui n'est pas http/https (chrome-extension://, etc.)
+  if (!event.request.url.startsWith('http')) return;
+
   const url = new URL(event.request.url);
 
   // Supabase → Network Only (temps réel, WebSockets, données)

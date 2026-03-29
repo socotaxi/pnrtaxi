@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PNR Taxi">
+  <!-- Fond bleu -->
+  <rect width="512" height="512" fill="#1A9BC5"/>
+
+  <!-- Texte PNR -->
+  <text x="16" y="210"
+    font-family="'Arial Black','Arial Bold',Arial,sans-serif"
+    font-weight="900"
+    font-size="108"
+    fill="white"
+    letter-spacing="2">PNR</text>
+
+  <!-- Cercle autour du T -->
+  <circle cx="264" cy="163" r="56" fill="none" stroke="white" stroke-width="14"/>
+
+  <!-- Lettre T dans le cercle -->
+  <text x="264" y="207"
+    font-family="'Arial Black','Arial Bold',Arial,sans-serif"
+    font-weight="900"
+    font-size="100"
+    fill="white"
+    text-anchor="middle">T</text>
+
+  <!-- Texte AXI -->
+  <text x="322" y="210"
+    font-family="'Arial Black','Arial Bold',Arial,sans-serif"
+    font-weight="900"
+    font-size="108"
+    fill="white"
+    letter-spacing="2">AXI</text>
+
+  <!-- Bande damier (style taxi) — rangée 1 -->
+  <rect x="0"   y="310" width="102" height="101" fill="white"/>
+  <rect x="204" y="310" width="102" height="101" fill="white"/>
+  <rect x="408" y="310" width="104" height="101" fill="white"/>
+
+  <!-- Bande damier — rangée 2 (décalée) -->
+  <rect x="102" y="411" width="102" height="101" fill="white"/>
+  <rect x="306" y="411" width="102" height="101" fill="white"/>
+</svg>
