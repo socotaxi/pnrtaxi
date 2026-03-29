@@ -5,6 +5,7 @@
 import { supabase } from './supabase-config.js';
 import { haversineDistance, formatDistance } from './haversine.js';
 import { initAuth, clearSession } from './auth.js';
+import { requestRide, updateRideStatus, watchActiveRide } from './rides.js';
 
 // ── Constantes ──────────────────────────────────────────────
 const CENTER          = { lat: -4.7792, lng: 11.8650 };
@@ -16,6 +17,8 @@ let map        = null;
 let userLat    = null;
 let userLng    = null;
 let userMarker = null;
+let session    = null;   // session passager courante
+let activeRide = null;   // course active (pending | accepted)
 const driverMarkers = new Map(); // id → marker Leaflet
 const driversData   = new Map(); // id → données brutes
 
@@ -181,6 +184,255 @@ async function watchDrivers() {
     });
 }
 
+// ── Notifications passager (son + vibration) ─────────────────
+function notifyPassenger(type) {
+  // Vibration
+  if (navigator.vibrate) {
+    navigator.vibrate(type === 'accepted' ? [100, 50, 100, 50, 200] : [400, 100, 400]);
+  }
+
+  // Son via Web Audio API
+  try {
+    const AudioCtx = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
+    const ctx = new AudioCtx();
+
+    if (type === 'accepted') {
+      // Deux notes montantes (Do → Mi) — ton positif
+      [{ freq: 523, t: 0 }, { freq: 659, t: 0.2 }].forEach(({ freq, t }) => {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.7, ctx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+        osc.start(ctx.currentTime + t);
+        osc.stop(ctx.currentTime + t + 0.25);
+      });
+      setTimeout(() => ctx.close(), 800);
+    } else {
+      // Une note basse unique — ton négatif
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sawtooth';
+      osc.frequency.value = 220;
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+      setTimeout(() => ctx.close(), 700);
+    }
+  } catch (err) {
+    console.warn('Audio non disponible:', err);
+  }
+}
+
+// ── Bandeau statut de course ─────────────────────────────────
+function updateRideBanner(ride) {
+  const banner    = document.getElementById('ride-banner');
+  const iconEl    = document.getElementById('ride-banner-icon');
+  const titleEl   = document.getElementById('ride-banner-title');
+  const driverEl  = document.getElementById('ride-banner-driver');
+  const cancelBtn = document.getElementById('ride-banner-cancel');
+
+  if (!ride || ride.status === 'cancelled') {
+    banner.className = 'ride-banner hidden';
+    activeRide = null;
+    syncBannerWithPanel();
+    return;
+  }
+
+  activeRide = ride;
+
+  const driverName = ride.drivers
+    ? [ride.drivers.prenom, ride.drivers.nom].filter(Boolean).join(' ') || ride.driver_id
+    : ride.driver_id;
+
+  if (ride.status === 'pending') {
+    banner.className = 'ride-banner';
+    iconEl.textContent    = '⏳';
+    titleEl.textContent   = 'En attente de confirmation…';
+    cancelBtn.textContent = 'Annuler';
+    cancelBtn.style.display = '';
+    cancelBtn.onclick = async () => {
+      if (!activeRide) return;
+      cancelBtn.disabled = true;
+      try {
+        await updateRideStatus(activeRide.id, 'cancelled');
+        updateRideBanner(null);
+      } catch (err) {
+        console.error('Erreur annulation course:', err);
+        cancelBtn.disabled = false;
+      }
+    };
+  } else if (ride.status === 'accepted') {
+    banner.className = 'ride-banner accepted';
+    iconEl.textContent   = '✅';
+    titleEl.textContent  = 'Course acceptée !';
+    cancelBtn.textContent = 'Fermer';
+    cancelBtn.style.display = '';
+    notifyPassenger('accepted');
+    // Un clic sur "Fermer" masque simplement le bandeau (la course reste en base)
+    cancelBtn.onclick = () => {
+      banner.classList.add('hidden');
+      syncBannerWithPanel();
+      activeRide = null;
+      refreshRideButtonInPanel();
+    };
+  } else if (ride.status === 'rejected') {
+    banner.className = 'ride-banner rejected';
+    iconEl.textContent  = '❌';
+    titleEl.textContent = 'Course refusée par le chauffeur';
+    cancelBtn.textContent    = 'Fermer';
+    cancelBtn.style.display  = '';
+    cancelBtn.onclick = () => {
+      banner.classList.add('hidden');
+      syncBannerWithPanel();
+      activeRide = null;
+      refreshRideButtonInPanel();
+    };
+    notifyPassenger('rejected');
+    // Masquer automatiquement après 6 s si pas fermé manuellement
+    setTimeout(() => {
+      if (activeRide?.status === 'rejected') {
+        banner.classList.add('hidden');
+        syncBannerWithPanel();
+        activeRide = null;
+        refreshRideButtonInPanel();
+      }
+    }, 6000);
+  }
+
+  driverEl.textContent = driverName;
+  banner.classList.remove('hidden');
+  syncBannerWithPanel();
+
+  // Recalcule le bouton dans le panneau si ouvert
+  refreshRideButtonInPanel();
+}
+
+// Masque le bandeau quand le panneau est ouvert, le restaure à la fermeture
+function syncBannerWithPanel() {
+  const panel     = document.getElementById('driver-panel');
+  const banner    = document.getElementById('ride-banner');
+  if (!panel || !banner) return;
+
+  const panelOpen        = panel.classList.contains('open');
+  const rideIsActive     = activeRide && (activeRide.status === 'pending' || activeRide.status === 'accepted');
+  const rideIsThisDriver = activeRide && panel._currentDriverId === activeRide.driver_id;
+
+  if (panelOpen && rideIsThisDriver) {
+    banner.classList.add('hidden');
+  } else if (rideIsActive) {
+    banner.classList.remove('hidden');
+  }
+}
+
+function refreshRideButtonInPanel() {
+  const panel = document.getElementById('driver-panel');
+  if (!panel.classList.contains('open')) return;
+  const driverId = panel._currentDriverId;
+  if (!driverId) return;
+  const driver = driversData.get(driverId);
+  if (!driver) return;
+  renderRideButton(driver);
+  renderWhatsAppCta(driver);
+}
+
+function renderRideButton(driver) {
+  const el = document.getElementById('panel-ride-request');
+  if (!el) return;
+
+  if (!driver.disponible) { el.innerHTML = ''; return; }
+
+  const passengerId = session?.telephone || session?.email;
+  if (!passengerId) { el.innerHTML = ''; return; }
+
+  // Course active sur CE chauffeur
+  if (activeRide && activeRide.driver_id === driver.id) {
+    if (activeRide.status === 'pending') {
+      el.innerHTML = `<button class="btn-request-ride pending" disabled>⏳ En attente…</button>`;
+      return;
+    }
+    if (activeRide.status === 'accepted') {
+      el.innerHTML = `<button class="btn-request-ride accepted" disabled>✅ Course acceptée</button>`;
+      return;
+    }
+  }
+
+  // Course active sur un AUTRE chauffeur
+  if (activeRide && activeRide.driver_id !== driver.id &&
+      (activeRide.status === 'pending' || activeRide.status === 'accepted')) {
+    el.innerHTML = `<button class="btn-request-ride" disabled>Course déjà en cours</button>`;
+    return;
+  }
+
+  el.innerHTML = `<button class="btn-request-ride" id="btn-request-ride-action">🚖 Demander ce taxi</button>`;
+  document.getElementById('btn-request-ride-action').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-request-ride-action');
+    btn.disabled = true;
+    btn.textContent = '⏳ Envoi…';
+    try {
+      const ride = await requestRide({
+        passengerId,
+        driverId:     driver.id,
+        passengerLat: userLat,
+        passengerLng: userLng,
+      });
+      updateRideBanner(ride);
+    } catch (err) {
+      console.error('Erreur demande de course:', err);
+      btn.disabled = false;
+      btn.textContent = '🚖 Demander ce taxi';
+      showToast('❌ Impossible d\'envoyer la demande', 3000);
+    }
+  });
+}
+
+// ── Bouton WhatsApp (verrouillé tant que la course n'est pas acceptée) ──
+const WA_SVG = `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <path d="M16.002 3C9.375 3 4 8.373 4 15c0 2.385.68 4.61 1.857 6.497L4 29l7.742-1.83A12.94 12.94 0 0016.002 28c6.626 0 12-5.373 12-12S22.628 3 16.002 3zm0 21.6a10.55 10.55 0 01-5.37-1.47l-.385-.229-3.986.942.988-3.875-.25-.4A10.56 10.56 0 015.4 15c0-5.848 4.755-10.6 10.6-10.6S26.6 9.152 26.6 15 21.848 24.6 16.002 24.6zm5.814-7.946c-.318-.16-1.887-.93-2.18-1.037-.294-.107-.508-.16-.721.16-.213.32-.826 1.037-.012 1.25.293.106 1.032.373 1.967.774.938.4 1.574 1.009 1.95 1.25.376.24.08.534-.054.72-.133.186-.373.32-.72.534-.347.213-.508.373-.828.188-.32-.186-1.24-.64-2.36-1.44-.89-.64-1.494-1.44-1.66-1.68-.168-.24-.018-.373.125-.48.128-.093.32-.24.48-.373.16-.133.213-.24.32-.4.107-.16.053-.32-.027-.453-.08-.133-.72-1.733-.986-2.374-.266-.64-.533-.56-.72-.56h-.613c-.213 0-.56.08-.853.373-.294.293-1.12 1.093-1.12 2.668 0 1.573 1.147 3.093 1.307 3.307.16.213 2.24 3.44 5.44 4.826.76.333 1.36.533 1.827.68.76.24 1.454.207 2 .127.614-.094 1.887-.773 2.147-1.52.267-.746.267-1.386.187-1.52-.08-.133-.294-.213-.614-.373z"/>
+</svg>`;
+
+function renderWhatsAppCta(driver) {
+  const ctaEl = document.getElementById('panel-cta');
+  if (!ctaEl) return;
+
+  if (!driver.disponible) {
+    ctaEl.innerHTML = `
+      <div style="text-align:center;padding:16px;
+        background:rgba(255,68,68,0.08);border:1px solid rgba(255,68,68,0.18);
+        border-radius:14px;color:var(--red);font-weight:600;font-size:0.9rem;">
+        ❌ Ce chauffeur n'est pas disponible
+      </div>`;
+    return;
+  }
+
+  if (!driver.telephone) { ctaEl.innerHTML = ''; return; }
+
+  const tel      = driver.telephone.replace(/\D/g, '');
+  const accepted = activeRide?.driver_id === driver.id && activeRide?.status === 'accepted';
+
+  if (accepted) {
+    ctaEl.innerHTML = `
+      <a class="btn-whatsapp" href="https://wa.me/${tel}" target="_blank" rel="noopener noreferrer">
+        ${WA_SVG}
+        📞 Appeler via WhatsApp
+      </a>`;
+  } else {
+    ctaEl.innerHTML = `
+      <button class="btn-whatsapp" disabled
+        title="Disponible après acceptation de la course"
+        style="opacity:0.45;cursor:not-allowed;pointer-events:none;">
+        ${WA_SVG}
+        🔒 Appel disponible après acceptation
+      </button>`;
+  }
+}
+
 // ── Panneau chauffeur ────────────────────────────────────────
 function openDriverPanel(driver) {
   const panel = document.getElementById('driver-panel');
@@ -209,31 +461,16 @@ function openDriverPanel(driver) {
   availEl.textContent = driver.disponible ? '● Disponible' : '● Non disponible';
   availEl.className   = `dp-chip ${driver.disponible ? 'available' : 'unavailable'}`;
 
-  // CTA
-  const ctaEl = document.getElementById('panel-cta');
-  if (driver.disponible && driver.telephone) {
-    const tel = driver.telephone.replace(/\D/g, '');
-    ctaEl.innerHTML = `
-      <a class="btn-whatsapp" href="https://wa.me/${tel}" target="_blank" rel="noopener noreferrer">
-        <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16.002 3C9.375 3 4 8.373 4 15c0 2.385.68 4.61 1.857 6.497L4 29l7.742-1.83A12.94 12.94 0 0016.002 28c6.626 0 12-5.373 12-12S22.628 3 16.002 3zm0 21.6a10.55 10.55 0 01-5.37-1.47l-.385-.229-3.986.942.988-3.875-.25-.4A10.56 10.56 0 015.4 15c0-5.848 4.755-10.6 10.6-10.6S26.6 9.152 26.6 15 21.848 24.6 16.002 24.6zm5.814-7.946c-.318-.16-1.887-.93-2.18-1.037-.294-.107-.508-.16-.721.16-.213.32-.826 1.037-.012 1.25.293.106 1.032.373 1.967.774.938.4 1.574 1.009 1.95 1.25.376.24.08.534-.054.72-.133.186-.373.32-.72.534-.347.213-.508.373-.828.188-.32-.186-1.24-.64-2.36-1.44-.89-.64-1.494-1.44-1.66-1.68-.168-.24-.018-.373.125-.48.128-.093.32-.24.48-.373.16-.133.213-.24.32-.4.107-.16.053-.32-.027-.453-.08-.133-.72-1.733-.986-2.374-.266-.64-.533-.56-.72-.56h-.613c-.213 0-.56.08-.853.373-.294.293-1.12 1.093-1.12 2.668 0 1.573 1.147 3.093 1.307 3.307.16.213 2.24 3.44 5.44 4.826.76.333 1.36.533 1.827.68.76.24 1.454.207 2 .127.614-.094 1.887-.773 2.147-1.52.267-.746.267-1.386.187-1.52-.08-.133-.294-.213-.614-.373z"/>
-        </svg>
-        📞 Appeler via WhatsApp
-      </a>`;
-  } else {
-    ctaEl.innerHTML = `
-      <div style="text-align:center;padding:16px;
-        background:rgba(255,68,68,0.08);border:1px solid rgba(255,68,68,0.18);
-        border-radius:14px;color:var(--red);font-weight:600;font-size:0.9rem;">
-        ❌ Ce chauffeur n'est pas disponible
-      </div>`;
-  }
+  renderWhatsAppCta(driver);
+  renderRideButton(driver);
 
   panel.classList.add('open');
+  syncBannerWithPanel();
 }
 
 function closeDriverPanel() {
   document.getElementById('driver-panel').classList.remove('open');
+  syncBannerWithPanel();
 }
 
 // ── Toast GPS ────────────────────────────────────────────────
@@ -412,8 +649,11 @@ function showProfile(session) {
   const telephone = session.telephone || '';
   const email     = session.email || '';
 
-  document.getElementById('info-prenom').textContent = prenom;
-  document.getElementById('info-telephone').textContent = telephone || (email ? '—' : '—');
+  document.getElementById('info-nom').textContent      = session.nom      || '—';
+  document.getElementById('info-prenom').textContent   = prenom;
+  document.getElementById('info-ville').textContent    = session.ville    || '—';
+  document.getElementById('info-quartier').textContent = session.quartier || '—';
+  document.getElementById('info-telephone').textContent = telephone || '—';
 
   if (email) {
     document.getElementById('info-email').textContent = email;
@@ -429,7 +669,10 @@ function showProfile(session) {
 
   // Bouton "Modifier"
   document.getElementById('prof-edit-btn').onclick = () => {
-    document.getElementById('edit-prenom').value = session.prenom || '';
+    document.getElementById('edit-nom').value      = session.nom      || '';
+    document.getElementById('edit-prenom').value   = session.prenom   || '';
+    document.getElementById('edit-ville').value    = session.ville    || '';
+    document.getElementById('edit-quartier').value = session.quartier || '';
     document.getElementById('prof-view').style.display = 'none';
     document.getElementById('prof-edit-form').style.display = '';
     document.getElementById('prof-save-error').textContent = '';
@@ -443,9 +686,13 @@ function showProfile(session) {
 
   // Enregistrer
   document.getElementById('prof-save-btn').onclick = async () => {
-    const newPrenom = document.getElementById('edit-prenom').value.trim();
-    if (newPrenom.length < 2) {
-      document.getElementById('prof-save-error').textContent = 'Le prénom doit avoir au moins 2 caractères.';
+    const newNom      = document.getElementById('edit-nom').value.trim();
+    const newPrenom   = document.getElementById('edit-prenom').value.trim();
+    const newVille    = document.getElementById('edit-ville').value.trim();
+    const newQuartier = document.getElementById('edit-quartier').value.trim();
+
+    if (newNom.length < 2 || newPrenom.length < 2) {
+      document.getElementById('prof-save-error').textContent = 'Le nom et le prénom doivent avoir au moins 2 caractères.';
       return;
     }
 
@@ -454,21 +701,24 @@ function showProfile(session) {
     saveBtn.textContent = '…';
 
     try {
+      const update = { nom: newNom, prenom: newPrenom, ville: newVille, quartier: newQuartier };
       if (session.telephone) {
-        const { error } = await supabase.from('passengers').update({ prenom: newPrenom }).eq('telephone', session.telephone);
+        const { error } = await supabase.from('passengers').update(update).eq('telephone', session.telephone);
         if (error) throw error;
       } else if (session.email) {
-        const { error } = await supabase.from('passengers').update({ prenom: newPrenom }).eq('email', session.email);
+        const { error } = await supabase.from('passengers').update(update).eq('email', session.email);
         if (error) throw error;
       }
 
       // Mettre à jour la session locale
-      session.prenom = newPrenom;
+      session.nom      = newNom;
+      session.prenom   = newPrenom;
+      session.ville    = newVille;
+      session.quartier = newQuartier;
       localStorage.setItem('pnr_passenger', JSON.stringify(session));
 
       // Rafraîchir l'affichage
       showProfile(session);
-      // Mettre à jour la salutation dashboard
       const nameEl = document.getElementById('dash-user-name');
       if (nameEl) nameEl.textContent = newPrenom;
 
@@ -497,7 +747,8 @@ function showProfile(session) {
 }
 
 // ── Dashboard passager ───────────────────────────────────────
-function startApp(session) {
+function startApp(s) {
+  session = s;
   const dashEl = document.getElementById('passenger-dashboard');
   dashEl.style.display = '';
 
@@ -540,6 +791,12 @@ function startApp(session) {
 
   // Profil depuis dashboard
   document.getElementById('nav-profile-dash-btn').addEventListener('click', () => showProfile(session));
+
+  // ── Courses en temps réel ────────────────────────────────
+  const passengerId = session.telephone || session.email;
+  if (passengerId) {
+    watchActiveRide(passengerId, updateRideBanner);
+  }
 }
 
 // ── Point d'entrée — Splash puis auth ────────────────────────

@@ -16,8 +16,8 @@ export function getSession() {
   } catch { return null; }
 }
 
-function saveSession(telephone, prenom, email = null, auth_provider = null, avatar_url = null) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ telephone, prenom, email, auth_provider, avatar_url }));
+function saveSession(telephone, prenom, email = null, auth_provider = null, avatar_url = null, quartier = null, ville = null) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ telephone, prenom, email, auth_provider, avatar_url, quartier, ville }));
 }
 
 export async function clearSession() {
@@ -106,9 +106,9 @@ async function uploadAvatar(telephone, file) {
   return data.publicUrl;
 }
 
-async function saveProfile(telephone, prenom, nom, avatarFile) {
+async function saveProfile(telephone, prenom, nom, quartier, ville, avatarFile) {
   const avatarUrl = await uploadAvatar(telephone, avatarFile);
-  const update    = { prenom, nom, ...(avatarUrl ? { avatar_url: avatarUrl } : {}) };
+  const update    = { prenom, nom, quartier, ville, ...(avatarUrl ? { avatar_url: avatarUrl } : {}) };
 
   const { error } = await supabase
     .from('passengers')
@@ -116,7 +116,7 @@ async function saveProfile(telephone, prenom, nom, avatarFile) {
     .eq('telephone', telephone);
 
   if (error) throw error;
-  saveSession(telephone, prenom, null, null, avatarUrl);
+  saveSession(telephone, prenom, null, null, avatarUrl, quartier, ville);
 }
 
 // ── Timer countdown ───────────────────────────────────────────
@@ -323,7 +323,7 @@ export async function initAuth(onComplete) {
 
     clearInterval(timerInterval);
     goTo('screen-name');
-    setTimeout(() => document.getElementById('prenom-input').focus(), 350);
+    setTimeout(() => document.getElementById('nom-input').focus(), 350);
     setLoading(btnVerify, false, 'Vérifier');
   });
 
@@ -342,52 +342,38 @@ export async function initAuth(onComplete) {
   // ────────────────────────────────────────────────
   // ÉCRAN 3 — Nom, Prénom & Avatar
   // ────────────────────────────────────────────────
-  const prenomInput   = document.getElementById('prenom-input');
   const nomInput      = document.getElementById('nom-input');
+  const prenomInput   = document.getElementById('prenom-input');
+  const villeInput    = document.getElementById('ville-input');
+  const quartierInput = document.getElementById('quartier-input');
   const btnStart      = document.getElementById('btn-save-name');
-  const avatarPicker  = document.getElementById('avatar-picker');
-  const avatarInput   = document.getElementById('avatar-file');
-  const avatarPreview = document.getElementById('avatar-preview');
-  let   avatarFile    = null;
 
   function checkNameReady() {
-    btnStart.disabled = prenomInput.value.trim().length < 2 || nomInput.value.trim().length < 2;
+    btnStart.disabled = nomInput.value.trim().length < 2
+      || prenomInput.value.trim().length < 2
+      || villeInput.value.trim().length < 2
+      || quartierInput.value.trim().length < 2;
   }
 
-  prenomInput.addEventListener('input', checkNameReady);
-  nomInput.addEventListener('input',    checkNameReady);
-
-  avatarPicker.addEventListener('click', () => avatarInput.click());
-
-  avatarInput.addEventListener('change', () => {
-    const file = avatarInput.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      showAuthError('name-error', 'La photo dépasse 2 Mo. Choisissez une image plus légère.');
-      return;
-    }
-    avatarFile = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      avatarPreview.innerHTML = `<img src="${e.target.result}" alt="avatar" />`;
-      avatarPicker.classList.add('has-photo');
-      avatarPicker.querySelector('.avatar-label').textContent = 'Photo sélectionnée ✓';
-    };
-    reader.readAsDataURL(file);
-  });
+  nomInput.addEventListener('input',      checkNameReady);
+  prenomInput.addEventListener('input',   checkNameReady);
+  villeInput.addEventListener('input',    checkNameReady);
+  quartierInput.addEventListener('input', checkNameReady);
 
   btnStart.addEventListener('click', async () => {
-    const prenom = prenomInput.value.trim();
-    const nom    = nomInput.value.trim();
-    if (prenom.length < 2 || nom.length < 2) return;
+    const nom      = nomInput.value.trim();
+    const prenom   = prenomInput.value.trim();
+    const ville    = villeInput.value.trim();
+    const quartier = quartierInput.value.trim();
+    if (nom.length < 2 || prenom.length < 2 || ville.length < 2 || quartier.length < 2) return;
 
     setLoading(btnStart, true, 'Commencer 🚖');
 
     try {
-      await saveProfile(currentPhone, prenom, nom, avatarFile);
+      await saveProfile(currentPhone, prenom, nom, quartier, ville, null);
 
       document.getElementById('auth-overlay').classList.remove('visible');
-      onComplete({ telephone: currentPhone, prenom });
+      onComplete({ telephone: currentPhone, prenom, nom, quartier, ville });
     } catch (err) {
       console.error(err);
       showAuthError('name-error', 'Erreur lors de la sauvegarde. Réessayez.');

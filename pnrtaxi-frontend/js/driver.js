@@ -3,6 +3,7 @@
 // ============================================================
 
 import { supabase } from './supabase-config.js';
+import { updateRideStatus, watchIncomingRides } from './rides.js';
 
 // ── État global ──────────────────────────────────────────────
 let currentDriver = null;
@@ -85,6 +86,7 @@ function loadDashboard() {
 
   initDriverMap();
   startGPS();
+  startRideWatch();
 }
 
 // ── Toggle ───────────────────────────────────────────────────
@@ -371,6 +373,128 @@ function showProfile() {
   };
 }
 
+// ── Demandes de course ────────────────────────────────────────
+const ridesMap = new Map(); // rideId → statut connu
+
+function startRideWatch() {
+  watchIncomingRides(currentPhone, onRideEvent);
+}
+
+function onRideEvent(ride) {
+  const isNew    = !ridesMap.has(ride.id);
+  const isPending = ride.status === 'pending';
+
+  ridesMap.set(ride.id, ride);
+  renderRidesList();
+
+  // Alerte sensorielle uniquement pour une nouvelle demande entrante
+  if (isNew && isPending) {
+    playRequestBeep();
+    vibrateRequest();
+  }
+}
+
+function playRequestBeep() {
+  try {
+    const AudioCtx = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
+    const ctx = new AudioCtx();
+
+    // Deux bips courts successifs
+    [0, 0.25].forEach(offset => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type      = 'sine';
+      osc.frequency.value = 880; // La5 — ton clair et perçant
+      gain.gain.setValueAtTime(0.8, ctx.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.18);
+
+      osc.start(ctx.currentTime + offset);
+      osc.stop(ctx.currentTime + offset + 0.18);
+    });
+
+    // Fermer le contexte après la fin
+    setTimeout(() => ctx.close(), 700);
+  } catch (err) {
+    console.warn('Audio non disponible:', err);
+  }
+}
+
+function vibrateRequest() {
+  if (!navigator.vibrate) return;
+  // Deux pulses : 200ms ON, 100ms OFF, 200ms ON
+  navigator.vibrate([200, 100, 200]);
+}
+
+function renderRidesList() {
+  const listEl = document.getElementById('rides-list');
+  if (!listEl) return;
+
+  // Regrouper : pending en tête, puis les autres (max 5 récents)
+  const rides = [...ridesMap.values()]
+    .sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1;
+      if (b.status === 'pending' && a.status !== 'pending') return 1;
+      return new Date(b.created_at) - new Date(a.created_at);
+    })
+    .slice(0, 5);
+
+  if (rides.length === 0) {
+    listEl.innerHTML = '<p class="no-rides-msg">Aucune demande en attente</p>';
+    return;
+  }
+
+  listEl.innerHTML = rides.map(ride => {
+    const statusLabel = { pending: 'En attente', accepted: 'Acceptée', rejected: 'Refusée', cancelled: 'Annulée' }[ride.status] || ride.status;
+    const timeStr = new Date(ride.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const actions = ride.status === 'pending' ? `
+      <div class="ride-card-actions">
+        <button class="btn-accept" data-id="${ride.id}">✅ Accepter</button>
+        <button class="btn-reject" data-id="${ride.id}">❌ Refuser</button>
+      </div>` : '';
+
+    return `
+      <div class="ride-card ${ride.status}" data-ride-id="${ride.id}">
+        <div class="ride-card-passenger">
+          📱 ${ride.passenger_id}
+          <span class="ride-card-status ${ride.status}">${statusLabel}</span>
+        </div>
+        <div class="ride-card-meta">Reçue à ${timeStr}</div>
+        ${actions}
+      </div>`;
+  }).join('');
+
+  // Attacher les listeners accept/reject
+  listEl.querySelectorAll('.btn-accept').forEach(btn => {
+    btn.addEventListener('click', () => handleRideAction(btn.dataset.id, 'accepted'));
+  });
+  listEl.querySelectorAll('.btn-reject').forEach(btn => {
+    btn.addEventListener('click', () => handleRideAction(btn.dataset.id, 'rejected'));
+  });
+}
+
+async function handleRideAction(rideId, status) {
+  const card = document.querySelector(`[data-ride-id="${rideId}"]`);
+  if (card) {
+    card.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  }
+  try {
+    await updateRideStatus(rideId, status);
+    const ride = ridesMap.get(rideId);
+    if (ride) {
+      ride.status = status;
+      ridesMap.set(rideId, ride);
+    }
+    renderRidesList();
+  } catch (err) {
+    console.error('Erreur mise à jour course:', err);
+    if (card) card.querySelectorAll('button').forEach(b => { b.disabled = false; });
+  }
+}
+
 // ── Déconnexion ───────────────────────────────────────────────
 function doLogout() {
   // 1. Retour visuel immédiat — ne pas attendre le réseau
@@ -406,6 +530,9 @@ function doLogout() {
   isAvailable   = false;
   lastLat       = null;
   lastLng       = null;
+  ridesMap.clear();
+  const listEl = document.getElementById('rides-list');
+  if (listEl) listEl.innerHTML = '<p class="no-rides-msg">Aucune demande en attente</p>';
 }
 
 logoutBtn.addEventListener('click', doLogout);

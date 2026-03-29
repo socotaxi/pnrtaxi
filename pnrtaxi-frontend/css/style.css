@@ -389,6 +389,7 @@ html, body {
 
 #driver-panel.open { transform: translateY(0); }
 
+
 /* Handle */
 .panel-handle {
   width: 40px;
@@ -554,6 +555,15 @@ html, body {
   width: 22px;
   height: 22px;
   fill: white;
+}
+
+.btn-whatsapp:disabled,
+.btn-whatsapp[disabled] {
+  background: #9ca3af;
+  box-shadow: none;
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.5;
 }
 
 /* ============================================================
@@ -1135,6 +1145,7 @@ html, body {
   z-index: 1000;
   display: none;
   overflow: hidden;
+  overflow-y: auto;
 }
 
 .auth-overlay.visible {
@@ -1509,6 +1520,41 @@ html, body {
   font-weight: 600;
 }
 
+/* ── Avatar picker (écran inscription) ── */
+.avatar-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-input);
+  border: 1.5px dashed var(--border);
+  border-radius: 14px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.avatar-picker:hover { border-color: var(--brand-600); background: var(--brand-50, #eff6ff); }
+.avatar-picker.has-photo { border-style: solid; border-color: var(--brand-600); }
+
+.avatar-preview {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+.avatar-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 /* ── Input prénom ── */
 .name-input {
   width: 100%;
@@ -1531,6 +1577,13 @@ html, body {
 }
 
 .name-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+/* Version compacte pour l'écran d'inscription (4 champs) */
+.name-input-sm {
+  padding: 12px 16px;
+  font-size: 1rem;
+  text-align: left;
+}
 
 /* ── Header zone utilisateur ── */
 .header-right {
@@ -2126,3 +2179,192 @@ html, body {
 }
 .prof-btn-save:hover { opacity: 0.9; }
 .prof-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ============================================================
+   RIDES — Demande de course
+   ============================================================ */
+
+/* ── Bouton "Demander ce taxi" (panneau chauffeur) ── */
+.btn-request-ride {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 20px;
+  background: var(--brand-600);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+  margin-bottom: 10px;
+}
+.btn-request-ride:hover   { opacity: 0.9; }
+.btn-request-ride:disabled {
+  background: var(--bg-input);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.btn-request-ride.pending {
+  background: var(--amber-600);
+}
+.btn-request-ride.accepted {
+  background: var(--green);
+}
+
+/* ── Bandeau statut de course (passager) ── */
+.ride-banner {
+  position: fixed;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
+  background: var(--bg-card);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.14);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1100;
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
+  border-left: 4px solid var(--brand-600);
+}
+.ride-banner.hidden {
+  transform: translateY(20px);
+  opacity: 0;
+  pointer-events: none;
+}
+.ride-banner.accepted { border-left-color: var(--green); }
+.ride-banner.rejected { border-left-color: var(--red); }
+
+.ride-banner-icon { font-size: 1.6rem; flex-shrink: 0; }
+
+.ride-banner-body { flex: 1; min-width: 0; }
+.ride-banner-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ride-banner-driver {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ride-banner-cancel {
+  flex-shrink: 0;
+  background: var(--red-50);
+  color: var(--red);
+  border: none;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.ride-banner-cancel:hover { opacity: 0.8; }
+
+/* ── Section demandes de course (chauffeur) ── */
+.rides-section {
+  margin: 16px 16px 0;
+}
+.rides-section-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.ride-card {
+  background: var(--bg-card);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  border-left: 4px solid var(--brand-600);
+  animation: ride-in 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+.ride-card.accepted { border-left-color: var(--green); }
+.ride-card.rejected { border-left-color: var(--red); opacity: 0.6; }
+.ride-card.cancelled { border-left-color: var(--text-muted); opacity: 0.5; }
+
+@keyframes ride-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ride-card-passenger {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.ride-card-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.ride-card-status {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-left: 6px;
+}
+.ride-card-status.pending  { background: var(--amber-50); color: var(--amber-800); }
+.ride-card-status.accepted { background: var(--green-50); color: var(--green-dark); }
+.ride-card-status.rejected { background: var(--red-50);   color: var(--red-dark); }
+
+.ride-card-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-accept {
+  flex: 1;
+  padding: 10px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-accept:hover    { opacity: 0.9; }
+.btn-accept:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-reject {
+  flex: 1;
+  padding: 10px;
+  background: var(--red-50);
+  color: var(--red);
+  border: 1.5px solid var(--red);
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-reject:hover    { opacity: 0.8; }
+.btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.no-rides-msg {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 16px 0;
+}

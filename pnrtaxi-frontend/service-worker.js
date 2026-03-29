@@ -4,13 +4,15 @@
 //              Network Only pour les données Supabase
 // ============================================================
 
-const CACHE_NAME   = 'taxi-pnr-v3';
+const CACHE_NAME   = 'taxi-pnr-v4';
 const CACHE_URLS   = [
   '/',
   '/index.html',
+  '/passenger.html',
   '/driver.html',
   '/css/style.css',
   '/js/supabase-config.js',
+  '/js/auth.js',
   '/js/passenger.js',
   '/js/driver.js',
   '/js/haversine.js',
@@ -63,6 +65,14 @@ self.addEventListener('fetch', (event) => {
   // Supabase → Network Only (temps réel, WebSockets, données)
   if (url.hostname.includes('supabase.co')) {
     return; // Laisse le navigateur gérer
+  }
+
+  // Fichiers HTML et JS → toujours récupérer depuis le réseau (jamais de cache)
+  if (url.pathname.endsWith('.html') || url.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
   }
 
   // Tuiles OSM → Cache First avec fallback réseau
