@@ -171,11 +171,11 @@ function startGPS() {
       gpsDot.classList.add('active');
       gpsText.textContent = `GPS actif · Précision ±${Math.round(accuracy)}m`;
 
-      // Envoyer à Supabase uniquement si position significativement changée
+      // Envoyer à Supabase uniquement si position significativement changée (~11m)
       const moved =
         lastLat === null ||
-        Math.abs(lat - lastLat) > 0.00005 ||
-        Math.abs(lng - lastLng) > 0.00005;
+        Math.abs(lat - lastLat) > 0.0001 ||
+        Math.abs(lng - lastLng) > 0.0001;
 
       if (moved) {
         lastLat = lat;
@@ -186,15 +186,23 @@ function startGPS() {
           .update({ lat, lng, last_seen: new Date().toISOString() })
           .eq('id', currentPhone);
 
-        if (error) console.warn('GPS update error:', error.message);
+        if (error) {
+          console.warn('GPS update error:', error.message);
+          gpsText.textContent = `⚠️ Erreur sync · Précision ±${Math.round(accuracy)}m`;
+        }
       }
     },
     (err) => {
       console.warn('GPS error:', err.message);
       gpsDot.classList.remove('active');
-      gpsText.textContent = 'Impossible d\'obtenir la position GPS';
+      const msgs = {
+        1: 'Permission GPS refusée — activez la localisation',
+        2: 'Signal GPS indisponible — vérifiez votre connexion',
+        3: 'GPS trop lent — vérifiez votre réseau',
+      };
+      gpsText.textContent = msgs[err.code] || 'Impossible d\'obtenir la position GPS';
     },
-    { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
   );
 }
 

@@ -254,6 +254,83 @@
       transition: background 0.2s, width 0.2s;
     }
     .step-dot.active { background: white; width: 20px; border-radius: 4px; }
+
+    /* ── Menu choix photo (permis) ── */
+    .permis-menu-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0);
+      z-index: 200;
+      align-items: flex-end;
+      transition: background 0.3s;
+    }
+    .permis-menu-backdrop.open {
+      display: flex;
+      background: rgba(0,0,0,0.55);
+    }
+    .permis-menu {
+      width: 100%;
+      background: var(--bg-card, #fff);
+      border-radius: 28px 28px 0 0;
+      padding: 0 20px calc(36px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      box-shadow: 0 -8px 40px rgba(0,0,0,0.14);
+    }
+    .permis-menu-backdrop.open .permis-menu { transform: translateY(0); }
+    .permis-menu-handle {
+      width: 40px; height: 4px;
+      background: var(--border, #e0e0e0);
+      border-radius: 2px;
+      margin: 14px auto 22px;
+    }
+    .permis-menu-title    { font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+    .permis-menu-subtitle { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 24px; }
+    .permis-menu-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+    .permis-menu-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 12px 20px;
+      border: 1.5px solid var(--border, #ebebeb);
+      border-radius: 20px;
+      background: var(--bg-input, #fafafa);
+      cursor: pointer;
+      transition: border-color 0.18s, background 0.18s, transform 0.12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .permis-menu-card:active { transform: scale(0.96); background: var(--bg-secondary, #f0f0f0); }
+    .permis-menu-card-icon {
+      width: 60px; height: 60px;
+      border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .permis-menu-card-icon.gallery { background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%); }
+    .permis-menu-card-icon.camera  { background: linear-gradient(135deg, #fef9c3 0%, #fde68a 100%); }
+    .permis-menu-card-icon svg     { width: 26px; height: 26px; }
+    .permis-menu-card-label { font-size: 0.88rem; font-weight: 600; color: var(--text-primary); text-align: center; }
+    .permis-menu-card-desc  { font-size: 0.72rem; color: var(--text-muted); text-align: center; line-height: 1.4; }
+    .permis-menu-cancel {
+      background: none;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+      border: none;
+      padding: 10px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .permis-menu-cancel:active { color: var(--red, #ef4444); }
   </style>
 </head>
 <body>
@@ -510,9 +587,43 @@
             <div class="permis-preview" id="permis-preview">🪪</div>
             <div class="avatar-info">
               <span class="avatar-label" id="permis-picker-label">Ajouter une photo</span>
-              <span class="avatar-hint">Recto du permis · JPG ou PNG · max 5 Mo</span>
+              <span class="avatar-hint">Recto du permis · Galerie ou appareil photo</span>
             </div>
-            <input type="file" id="permis-file" accept="image/jpeg,image/png,image/webp" style="display:none" />
+            <input type="file" id="permis-file"   accept="image/jpeg,image/png,image/webp" style="display:none" />
+            <input type="file" id="permis-camera" accept="image/*" capture="environment" style="display:none" />
+          </div>
+        </div>
+
+        <!-- Menu choix source photo permis -->
+        <div class="permis-menu-backdrop" id="permis-menu-backdrop">
+          <div class="permis-menu">
+            <div class="permis-menu-handle"></div>
+            <p class="permis-menu-title">Photo du permis</p>
+            <p class="permis-menu-subtitle">Choisissez votre source</p>
+            <div class="permis-menu-cards">
+              <button class="permis-menu-card" id="btn-permis-gallery">
+                <span class="permis-menu-card-icon gallery">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#0891b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="3"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                </span>
+                <span class="permis-menu-card-label">Galerie</span>
+                <span class="permis-menu-card-desc">Depuis vos photos</span>
+              </button>
+              <button class="permis-menu-card" id="btn-permis-camera">
+                <span class="permis-menu-card-icon camera">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </span>
+                <span class="permis-menu-card-label">Appareil photo</span>
+                <span class="permis-menu-card-desc">Photographier le permis</span>
+              </button>
+            </div>
+            <button class="permis-menu-cancel" id="btn-permis-cancel">Annuler</button>
           </div>
         </div>
 
@@ -535,6 +646,19 @@
 
   const session = getDriverSession();
   if (!session) window.location.replace('driver-auth.html?m=signup');
+
+  // Pré-remplir nom & prénom depuis la session
+  if (session.nom)    document.getElementById('p-nom').value    = session.nom.toUpperCase();
+  if (session.prenom) document.getElementById('p-prenom').value = session.prenom;
+
+  // Pré-remplir la photo de profil depuis la session
+  if (session.photo) {
+    const picker  = document.getElementById('avatar-picker');
+    const preview = document.getElementById('avatar-preview');
+    preview.innerHTML = `<img src="${session.photo}" alt="avatar" />`;
+    picker.classList.add('has-photo');
+    picker.querySelector('.avatar-label').textContent = 'Photo sélectionnée ✓';
+  }
 
   // ══════════════════════════════════════════════════════════════
   //  Données marques / modèles
@@ -781,15 +905,15 @@
   // ── Photo du permis ────────────────────────────────────────────
   let permisFile = null;
 
-  const permisPicker  = document.getElementById('permis-picker');
-  const permisInput   = document.getElementById('permis-file');
-  const permisPreview = document.getElementById('permis-preview');
+  const permisPicker   = document.getElementById('permis-picker');
+  const permisInput    = document.getElementById('permis-file');
+  const permisCamera   = document.getElementById('permis-camera');
+  const permisPreview  = document.getElementById('permis-preview');
+  const permisBackdrop = document.getElementById('permis-menu-backdrop');
 
-  permisPicker.addEventListener('click', () => permisInput.click());
-
-  permisInput.addEventListener('change', () => {
-    const file = permisInput.files[0];
+  function applyPermisFile(file) {
     if (!file) return;
+    permisBackdrop.classList.remove('open');
     if (file.size > 5 * 1024 * 1024) {
       showError('permis-error', 'La photo du permis dépasse 5 Mo. Choisissez une image plus légère.');
       return;
@@ -803,7 +927,26 @@
       checkPermisReady();
     };
     reader.readAsDataURL(file);
+  }
+
+  permisPicker.addEventListener('click', () => permisBackdrop.classList.add('open'));
+  document.getElementById('btn-permis-gallery').addEventListener('click', () => {
+    permisBackdrop.classList.remove('open');
+    permisInput.click();
   });
+  document.getElementById('btn-permis-camera').addEventListener('click', () => {
+    permisBackdrop.classList.remove('open');
+    permisCamera.click();
+  });
+  document.getElementById('btn-permis-cancel').addEventListener('click', () => {
+    permisBackdrop.classList.remove('open');
+  });
+  permisBackdrop.addEventListener('click', (e) => {
+    if (e.target === permisBackdrop) permisBackdrop.classList.remove('open');
+  });
+
+  permisInput.addEventListener('change',  () => applyPermisFile(permisInput.files[0]));
+  permisCamera.addEventListener('change', () => applyPermisFile(permisCamera.files[0]));
 
   async function uploadPermisPhoto(telephone) {
     if (!permisFile) return null;
@@ -835,12 +978,22 @@
     btnSaveAll.textContent = '…';
 
     try {
-      const photoUrl      = await uploadAvatar(session.telephone);
+      // Si une nouvelle photo de profil est choisie ici, on la re-uploade
+      // sinon on réutilise celle déjà uploadée depuis la page précédente
+      const newPhotoUrl    = await uploadAvatar(session.telephone);
+      const photoUrl       = newPhotoUrl || session.photo || null;
       const permisPhotoUrl = await uploadPermisPhoto(session.telephone);
 
+      // INSERT unique avec toutes les données — premier et seul enregistrement en base
       const { error } = await supabase
         .from('drivers')
-        .update({
+        .insert({
+          // Identité
+          id                   : session.telephone,
+          telephone            : session.telephone,
+          prenom               : session.prenom,
+          nom                  : session.nom,
+          verified             : true,
           // Véhicule
           type_vehicule        : selectedType,
           marque,
@@ -856,10 +1009,9 @@
           permis_numero        : numero,
           permis_date_emission : date,
           // Photos
-          ...(photoUrl       ? { photo               : photoUrl       } : {}),
-          ...(permisPhotoUrl ? { permis_photo         : permisPhotoUrl } : {}),
-        })
-        .eq('telephone', session.telephone);
+          ...(photoUrl       ? { photo        : photoUrl       } : {}),
+          ...(permisPhotoUrl ? { permis_photo : permisPhotoUrl } : {}),
+        });
 
       if (error) throw error;
 

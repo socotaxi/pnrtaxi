@@ -169,19 +169,39 @@ async function watchDrivers() {
   data.forEach(d => upsertDriverMarker(d));
   updateCount();
 
-  supabase.channel('drivers-realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, ({ eventType, new: n, old: o }) => {
-      if (eventType === 'INSERT' || eventType === 'UPDATE') {
-        upsertDriverMarker(n);
-        const panel = document.getElementById('driver-panel');
-        if (panel.classList.contains('open') && panel._currentDriverId === n.id) openDriverPanel(n);
-      }
-      if (eventType === 'DELETE') removeDriverMarker(o.id);
-      updateCount();
-    })
-    .subscribe(status => {
-      if (status === 'SUBSCRIBED') console.log('[Supabase] Temps réel actif ✅');
-    });
+  let realtimeChannel = null;
+
+  function subscribeDrivers() {
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel);
+    }
+
+    realtimeChannel = supabase.channel('drivers-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, ({ eventType, new: n, old: o }) => {
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          upsertDriverMarker(n);
+          const panel = document.getElementById('driver-panel');
+          if (panel.classList.contains('open') && panel._currentDriverId === n.id) openDriverPanel(n);
+        }
+        if (eventType === 'DELETE') removeDriverMarker(o.id);
+        updateCount();
+      })
+      .subscribe(status => {
+        const countEl = document.getElementById('driver-count');
+        if (status === 'SUBSCRIBED') {
+          console.log('[Supabase] Temps réel actif ✅');
+          if (countEl) countEl.style.color = '';
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Supabase] Connexion perdue, reconnexion dans 5s…');
+          if (countEl) countEl.style.color = '#ff9800';
+          setTimeout(subscribeDrivers, 5000);
+        } else if (status === 'CLOSED') {
+          console.warn('[Supabase] Canal fermé');
+        }
+      });
+  }
+
+  subscribeDrivers();
 }
 
 // ── Notifications passager (son + vibration) ─────────────────

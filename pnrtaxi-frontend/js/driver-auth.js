@@ -17,8 +17,8 @@ export function getDriverSession() {
   } catch { return null; }
 }
 
-function saveDriverSession(telephone, prenom, email = null, auth_provider = null) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ telephone, prenom, email, auth_provider, role: 'driver' }));
+function saveDriverSession(telephone, prenom, nom = null, photo = null, email = null, auth_provider = null) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ telephone, prenom, nom, photo, email, auth_provider, role: 'driver' }));
 }
 
 export async function clearDriverSession() {
@@ -69,66 +69,54 @@ async function handleDriverOAuthCallback() {
   return { isNew: true };
 }
 
-// ── OTP ──────────────────────────────────────────────────────
+// ── OTP (stocké en mémoire uniquement, aucune écriture DB) ───
+let _pendingDriverOTP = { code: null, expiresAt: 0 };
+
 function generateOTP() {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
 async function sendDriverOTP(telephone) {
-  const otp       = generateOTP();
-  const expiresAt = new Date(Date.now() + OTP_DURATION * 1000).toISOString();
+  const code = generateOTP();
+  _pendingDriverOTP = { code, expiresAt: Date.now() + OTP_DURATION * 1000 };
 
-  // Vérifie si le chauffeur existe déjà
+  // Lecture seule — vérifie si le chauffeur existe déjà (compte vérifié)
   const { data: existing } = await supabase
     .from('drivers')
-    .select('telephone')
+    .select('telephone, prenom')
     .eq('telephone', telephone)
+    .eq('verified', true)
     .maybeSingle();
 
-  if (existing) {
-    // Connexion — met à jour l'OTP
-    const { error } = await supabase
-      .from('drivers')
-      .update({ otp, otp_expires_at: expiresAt })
-      .eq('telephone', telephone);
-    if (error) throw error;
-    return { otp, isNew: false };
-  } else {
-    // Inscription — crée l'entrée (id = telephone, clé primaire de la table)
-    const { error } = await supabase
-      .from('drivers')
-      .insert({ id: telephone, telephone, otp, otp_expires_at: expiresAt, verified: false });
-    if (error) throw error;
-    return { otp, isNew: true };
-  }
+  // Production : remplacer par appel SMS / WhatsApp API
+  return { otp: code, isNew: !existing, existingPrenom: existing?.prenom || null };
 }
 
-async function verifyDriverOTP(telephone, code) {
-  const { data, error } = await supabase
-    .from('drivers')
-    .select('otp, otp_expires_at')
-    .eq('telephone', telephone)
-    .single();
-
-  if (error || !data)           return false;
-  if (data.otp !== code)        return false;
-  if (new Date(data.otp_expires_at) < new Date()) return false;
-
-  await supabase
-    .from('drivers')
-    .update({ verified: true, otp: null, otp_expires_at: null })
-    .eq('telephone', telephone);
-
+function verifyDriverOTP(code) {
+  if (!_pendingDriverOTP.code) return false;
+  if (_pendingDriverOTP.code !== code) return false;
+  if (Date.now() > _pendingDriverOTP.expiresAt) return false;
   return true;
 }
 
-async function saveDriverProfile(telephone, prenom, nom) {
-  const { error } = await supabase
-    .from('drivers')
-    .update({ prenom, nom })
-    .eq('telephone', telephone);
+async function uploadDriverAvatar(telephone, file) {
+  if (!file) return null;
+  const ext  = file.name.split('.').pop();
+  const path = `drivers/${telephone}.${ext}`;
+  const { error } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { upsert: true, contentType: file.type });
   if (error) throw error;
-  saveDriverSession(telephone, prenom);
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function saveDriverProfile(telephone, prenom, nom, avatarFile) {
+  // Upload photo vers le storage uniquement — aucune écriture en DB
+  // L'INSERT complet se fait à la fin de driver-vehicle.html
+  const avatarUrl = await uploadDriverAvatar(telephone, avatarFile);
+  _pendingDriverOTP = { code: null, expiresAt: 0 };
+  saveDriverSession(telephone, prenom, nom, avatarUrl);
 }
 
 // ── Timer countdown ───────────────────────────────────────────
@@ -238,9 +226,10 @@ export async function initDriverAuth() {
 
   initOTPBoxes();
 
-  let currentPhone = '';
-  let currentOTP   = '';
-  let isNewDriver  = false;
+  let currentPhone    = '';
+  let currentOTP      = '';
+  let isNewDriver     = false;
+  let existingPrenom  = null;
 
   // ── ÉCRAN 1 — Téléphone ─────────────────────────────────────
   const btnSend     = document.getElementById('btn-send-otp');
@@ -258,12 +247,13 @@ export async function initDriverAuth() {
 
     const dialCode = prefixSel.value;
     currentPhone   = dialCode + digits;
-    setLoading(btnSend, true, 'Recevoir le code');
+    setLoading(btnSend, true, 'Connexion / Recevoir le code');
 
     try {
       const result = await sendDriverOTP(currentPhone);
-      currentOTP  = result.otp;
-      isNewDriver = result.isNew;
+      currentOTP     = result.otp;
+      isNewDriver    = result.isNew;
+      existingPrenom = result.existingPrenom;
 
       const masked = '+' + dialCode + ' ' + digits.slice(0, 2) + ' *** ** ' + digits.slice(-2);
       document.getElementById('otp-subtitle').textContent = `Envoyé au ${masked}`;
@@ -278,7 +268,7 @@ export async function initDriverAuth() {
       const msg = err?.message || JSON.stringify(err);
       showAuthError('phone-error', `Erreur : ${msg}`);
     } finally {
-      setLoading(btnSend, false, 'Recevoir le code');
+      setLoading(btnSend, false, 'Connexion / Recevoir le code');
     }
   });
 
@@ -296,7 +286,7 @@ export async function initDriverAuth() {
     if (code.length < 4) return;
 
     setLoading(btnVerify, true, 'Vérifier');
-    const ok = await verifyDriverOTP(currentPhone, code);
+    const ok = verifyDriverOTP(code);
 
     if (!ok) {
       showAuthError('otp-error', 'Code incorrect ou expiré.');
@@ -313,14 +303,8 @@ export async function initDriverAuth() {
       goTo('screen-name');
       setTimeout(() => document.getElementById('prenom-input').focus(), 350);
     } else {
-      // Connexion → charger le prénom depuis la DB puis rediriger
-      const { data } = await supabase
-        .from('drivers')
-        .select('prenom')
-        .eq('telephone', currentPhone)
-        .single();
-      const prenom = data?.prenom || 'Chauffeur';
-      saveDriverSession(currentPhone, prenom);
+      // Connexion → prénom déjà chargé lors de sendDriverOTP
+      saveDriverSession(currentPhone, existingPrenom || 'Chauffeur');
       window.location.replace('driver.html');
     }
   });
@@ -337,10 +321,42 @@ export async function initDriverAuth() {
     }
   });
 
-  // ── ÉCRAN 3 — Nom & Prénom (inscription seulement) ───────────
-  const prenomInput = document.getElementById('prenom-input');
-  const nomInput    = document.getElementById('nom-input');
-  const btnStart    = document.getElementById('btn-save-name');
+  // ── ÉCRAN 3 — Nom, Prénom & Avatar (inscription seulement) ──
+  const prenomInput    = document.getElementById('prenom-input');
+  const nomInput       = document.getElementById('nom-input');
+  const btnStart       = document.getElementById('btn-save-name');
+  const avatarPicker   = document.getElementById('avatar-picker');
+  const avatarFile     = document.getElementById('avatar-file');
+  const avatarCamera   = document.getElementById('avatar-camera');
+  const avatarPreview  = document.getElementById('avatar-preview');
+  const avatarBackdrop = document.getElementById('avatar-menu-backdrop');
+  let   selectedAvatar = null;
+
+  function applyAvatarFile(file) {
+    if (!file) return;
+    avatarBackdrop.classList.remove('open');
+    selectedAvatar = file;
+    avatarPreview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="aperçu" />`;
+    avatarPicker.classList.add('has-photo');
+  }
+
+  avatarPicker.addEventListener('click', () => avatarBackdrop.classList.add('open'));
+  document.getElementById('btn-pick-gallery').addEventListener('click', () => {
+    avatarBackdrop.classList.remove('open');
+    avatarFile.click();
+  });
+  document.getElementById('btn-pick-camera').addEventListener('click', () => {
+    avatarBackdrop.classList.remove('open');
+    avatarCamera.click();
+  });
+  document.getElementById('btn-pick-cancel').addEventListener('click', () => {
+    avatarBackdrop.classList.remove('open');
+  });
+  avatarBackdrop.addEventListener('click', (e) => {
+    if (e.target === avatarBackdrop) avatarBackdrop.classList.remove('open');
+  });
+  avatarFile.addEventListener('change',   () => applyAvatarFile(avatarFile.files[0]));
+  avatarCamera.addEventListener('change', () => applyAvatarFile(avatarCamera.files[0]));
 
   function checkNameReady() {
     btnStart.disabled = prenomInput.value.trim().length < 2 || nomInput.value.trim().length < 2;
@@ -356,7 +372,7 @@ export async function initDriverAuth() {
 
     setLoading(btnStart, true, 'Continuer');
     try {
-      await saveDriverProfile(currentPhone, prenom, nom);
+      await saveDriverProfile(currentPhone, prenom, nom, selectedAvatar);
       window.location.replace('driver-vehicle.html');
     } catch (err) {
       console.error(err);

@@ -95,6 +95,114 @@
     .avatar-label { font-size: 0.86rem; font-weight: 600; color: var(--text-primary); }
     .avatar-hint  { font-size: 0.73rem; color: var(--text-muted); }
 
+    /* ── Menu choix photo ── */
+    .avatar-menu-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0);
+      z-index: 200;
+      align-items: flex-end;
+      transition: background 0.3s;
+    }
+    .avatar-menu-backdrop.open {
+      display: flex;
+      background: rgba(0,0,0,0.55);
+    }
+    .avatar-menu {
+      width: 100%;
+      background: var(--bg-card, #fff);
+      border-radius: 28px 28px 0 0;
+      padding: 0 20px calc(36px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      box-shadow: 0 -8px 40px rgba(0,0,0,0.14);
+    }
+    .avatar-menu-backdrop.open .avatar-menu { transform: translateY(0); }
+
+    .avatar-menu-handle {
+      width: 40px; height: 4px;
+      background: var(--border, #e0e0e0);
+      border-radius: 2px;
+      margin: 14px auto 22px;
+    }
+    .avatar-menu-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .avatar-menu-subtitle {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    /* Cartes côte à côte */
+    .avatar-menu-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+    .avatar-menu-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 12px 20px;
+      border: 1.5px solid var(--border, #ebebeb);
+      border-radius: 20px;
+      background: var(--bg-input, #fafafa);
+      cursor: pointer;
+      transition: border-color 0.18s, background 0.18s, transform 0.12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .avatar-menu-card:active {
+      transform: scale(0.96);
+      background: var(--bg-secondary, #f0f0f0);
+    }
+    .avatar-menu-card-icon {
+      width: 60px; height: 60px;
+      border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .avatar-menu-card-icon.gallery {
+      background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    }
+    .avatar-menu-card-icon.camera {
+      background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    }
+    .avatar-menu-card-icon svg { width: 26px; height: 26px; }
+    .avatar-menu-card-label {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: center;
+    }
+    .avatar-menu-card-desc {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .avatar-menu-cancel {
+      background: none;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+      border: none;
+      padding: 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: color 0.15s;
+    }
+    .avatar-menu-cancel:active { color: var(--red, #ef4444); }
+
     /* Badge mode "Inscription" sur le logo */
     .auth-mode-chip {
       display: inline-block;
@@ -184,7 +292,7 @@
         <div class="auth-error" id="phone-error"></div>
 
         <button class="btn-auth" id="btn-send-otp" disabled>
-          Recevoir le code
+          Connexion / Recevoir le code
         </button>
       </div>
 
@@ -264,7 +372,6 @@
 
       <div class="auth-hero" style="margin-top:60px">
         <div class="verified-chip">✅ Numéro vérifié</div>
-        <div class="auth-logo-icon" style="margin-top:24px">👋</div>
         <div class="auth-brand">Bienvenue !</div>
       </div>
 
@@ -315,9 +422,46 @@
           <div class="avatar-preview" id="avatar-preview">👤</div>
           <div class="avatar-info">
             <span class="avatar-label">Photo de profil</span>
-            <span class="avatar-hint">Optionnel · JPG ou PNG · max 2 Mo</span>
+            <span class="avatar-hint">Optionnel · Galerie ou appareil photo</span>
           </div>
-          <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp" style="display:none" />
+          <input type="file" id="avatar-file"   accept="image/jpeg,image/png,image/webp" style="display:none" />
+          <input type="file" id="avatar-camera" accept="image/*" capture="user" style="display:none" />
+        </div>
+
+        <!-- Menu choix source photo -->
+        <div class="avatar-menu-backdrop" id="avatar-menu-backdrop">
+          <div class="avatar-menu">
+            <div class="avatar-menu-handle"></div>
+            <p class="avatar-menu-title">Ajouter une photo</p>
+            <p class="avatar-menu-subtitle">Choisissez votre source</p>
+
+            <div class="avatar-menu-cards">
+              <button class="avatar-menu-card" id="btn-pick-gallery">
+                <span class="avatar-menu-card-icon gallery">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="3"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                </span>
+                <span class="avatar-menu-card-label">Galerie</span>
+                <span class="avatar-menu-card-desc">Depuis vos photos</span>
+              </button>
+
+              <button class="avatar-menu-card" id="btn-pick-camera">
+                <span class="avatar-menu-card-icon camera">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </span>
+                <span class="avatar-menu-card-label">Appareil photo</span>
+                <span class="avatar-menu-card-desc">Prendre un selfie</span>
+              </button>
+            </div>
+
+            <button class="avatar-menu-cancel" id="btn-pick-cancel">Annuler</button>
+          </div>
         </div>
 
         <div class="auth-error" id="name-error"></div>
