@@ -13,12 +13,13 @@ const ZOOM            = 13;
 const ZONE_RADIUS_KM  = 5; // rayon de la zone en km
 
 // ── État global ──────────────────────────────────────────────
-let map        = null;
-let userLat    = null;
-let userLng    = null;
-let userMarker = null;
-let session    = null;   // session passager courante
-let activeRide = null;   // course active (pending | accepted)
+let map           = null;
+let userLat       = null;
+let userLng       = null;
+let userMarker    = null;
+let userWatchId   = null;   // watchPosition handle
+let session       = null;   // session passager courante
+let activeRide    = null;   // course active (pending | accepted)
 const driverMarkers = new Map(); // id → marker Leaflet
 const driversData   = new Map(); // id → données brutes
 
@@ -32,42 +33,77 @@ function initMap() {
   }).addTo(map);
 }
 
-// ── Géolocalisation passager ─────────────────────────────────
+// ── Géolocalisation passager (suivi continu) ─────────────────
+const userIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    width:18px;height:18px;border-radius:50%;
+    background:#4a90e2;border:3px solid white;
+    box-shadow:0 0 0 4px rgba(74,144,226,0.3);
+  "></div>`,
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+});
+
 function locateUser() {
-  if (!navigator.geolocation) return;
+  if (!navigator.geolocation) {
+    showToast('⚠️ GPS non disponible sur cet appareil', 3000);
+    return;
+  }
   showToast('📍 Localisation en cours…');
 
-  navigator.geolocation.getCurrentPosition(
+  // Arrêter un éventuel watch précédent
+  if (userWatchId !== null) {
+    navigator.geolocation.clearWatch(userWatchId);
+    userWatchId = null;
+  }
+
+  let firstFix = true;
+
+  userWatchId = navigator.geolocation.watchPosition(
     (pos) => {
       userLat = pos.coords.latitude;
       userLng = pos.coords.longitude;
 
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="
-          width:18px;height:18px;border-radius:50%;
-          background:#4a90e2;border:3px solid white;
-          box-shadow:0 0 0 4px rgba(74,144,226,0.3);
-        "></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
-
       if (userMarker) {
         userMarker.setLatLng([userLat, userLng]);
       } else {
-        userMarker = L.marker([userLat, userLng], { icon })
+        userMarker = L.marker([userLat, userLng], { icon: userIcon })
           .addTo(map)
           .bindPopup('<b>📍 Vous êtes ici</b>');
       }
 
-      map.flyTo([userLat, userLng], ZOOM, { animate: true, duration: 1 });
-      showToast('✅ Position trouvée', 2000);
-      refreshMarkers(); // recalcule les marqueurs selon la zone
+      // Centrage automatique uniquement au premier fix
+      if (firstFix) {
+        firstFix = false;
+        map.flyTo([userLat, userLng], ZOOM, { animate: true, duration: 1 });
+        showToast('✅ Position trouvée', 2000);
+        // Activer le bouton centrer
+        const btn = document.getElementById('locate-me-btn');
+        if (btn) btn.classList.add('active');
+      }
+
+      refreshMarkers();
     },
-    () => showToast('⚠️ Position non disponible', 3000),
-    { enableHighAccuracy: true, timeout: 10000 }
+    (err) => {
+      const msgs = {
+        1: '⚠️ Permission GPS refusée',
+        2: '⚠️ Signal GPS indisponible',
+        3: '⚠️ GPS trop lent',
+      };
+      showToast(msgs[err.code] || '⚠️ Position non disponible', 3000);
+    },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
   );
+}
+
+// Recentrer la carte sur la position du passager
+function centerOnUser() {
+  if (userLat !== null && userLng !== null) {
+    map.flyTo([userLat, userLng], ZOOM, { animate: true, duration: 0.8 });
+  } else {
+    showToast('📍 Position non encore disponible…', 2000);
+  }
 }
 
 // ── Icône voiture ────────────────────────────────────────────
@@ -258,7 +294,10 @@ function updateRideBanner(ride) {
   const driverEl  = document.getElementById('ride-banner-driver');
   const cancelBtn = document.getElementById('ride-banner-cancel');
 
-  if (!ride || ride.status === 'cancelled') {
+  const dismissedKey = ride ? `dismissed_ride_${ride.id}` : null;
+  const isDismissed  = dismissedKey && localStorage.getItem(dismissedKey);
+
+  if (!ride || ride.status === 'cancelled' || ride.status === 'completed' || isDismissed) {
     banner.className = 'ride-banner hidden';
     activeRide = null;
     syncBannerWithPanel();
@@ -295,8 +334,9 @@ function updateRideBanner(ride) {
     cancelBtn.textContent = 'Fermer';
     cancelBtn.style.display = '';
     notifyPassenger('accepted');
-    // Un clic sur "Fermer" masque simplement le bandeau (la course reste en base)
-    cancelBtn.onclick = () => {
+    cancelBtn.onclick = async () => {
+      localStorage.setItem(`dismissed_ride_${ride.id}`, '1');
+      try { await updateRideStatus(ride.id, 'completed'); } catch (_) {}
       banner.classList.add('hidden');
       syncBannerWithPanel();
       activeRide = null;
@@ -570,6 +610,7 @@ function showMap() {
     watchDrivers();
 
     document.getElementById('panel-close').addEventListener('click', closeDriverPanel);
+    document.getElementById('locate-me-btn').addEventListener('click', centerOnUser);
     map.on('click', closeDriverPanel);
 
     let touchStartY = 0;

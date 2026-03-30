@@ -192,6 +192,30 @@ html, body {
   animation: pulse 2s infinite;
 }
 
+/* ── Bouton centrer sur ma position ── */
+.locate-me-btn {
+  position: absolute;
+  bottom: 172px;
+  right: 16px;
+  z-index: 100;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #888;
+  transition: color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.locate-me-btn.active { color: #4a90e2; }
+.locate-me-btn:active { transform: scale(0.92); }
+
 /* ── Bouton utilisateur flottant ── */
 .float-user-btn {
   position: absolute;
