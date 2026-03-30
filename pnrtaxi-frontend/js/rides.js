@@ -77,6 +77,20 @@ export function watchActiveRide(passengerId, callback) {
 }
 
 /**
+ * Charger l'historique des courses d'un chauffeur (rejected + cancelled)
+ */
+export async function loadDriverRideHistory(driverId, limit = 50) {
+  const { data } = await supabase
+    .from('rides')
+    .select('*')
+    .eq('driver_id', driverId)
+    .in('status', ['rejected', 'cancelled'])
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return data || [];
+}
+
+/**
  * Écouter les demandes de course entrant pour un chauffeur
  * Appelle callback(ride) à chaque INSERT ou UPDATE.
  * @returns {object} canal Supabase

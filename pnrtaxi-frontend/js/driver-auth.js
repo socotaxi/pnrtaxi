@@ -250,10 +250,26 @@ export async function initDriverAuth() {
     setLoading(btnSend, true, 'Connexion / Recevoir le code');
 
     try {
+      // Vérifier si le chauffeur existe déjà en base
+      const { data: existing } = await supabase
+        .from('drivers')
+        .select('telephone, prenom')
+        .eq('telephone', currentPhone)
+        .eq('verified', true)
+        .maybeSingle();
+
+      if (existing) {
+        // Chauffeur connu → accès direct sans OTP
+        saveDriverSession(currentPhone, existing.prenom || 'Chauffeur');
+        window.location.replace('driver.html');
+        return;
+      }
+
+      // Nouveau chauffeur → flow OTP
       const result = await sendDriverOTP(currentPhone);
       currentOTP     = result.otp;
-      isNewDriver    = result.isNew;
-      existingPrenom = result.existingPrenom;
+      isNewDriver    = true;
+      existingPrenom = null;
 
       const masked = '+' + dialCode + ' ' + digits.slice(0, 2) + ' *** ** ' + digits.slice(-2);
       document.getElementById('otp-subtitle').textContent = `Envoyé au ${masked}`;

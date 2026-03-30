@@ -3,25 +3,23 @@
 // ============================================================
 
 import { supabase } from './supabase-config.js';
-import { updateRideStatus, watchIncomingRides } from './rides.js';
+import { updateRideStatus, watchIncomingRides, loadDriverRideHistory } from './rides.js';
 
 // ── État global ──────────────────────────────────────────────
-let currentDriver = null;
-let currentPhone  = null;
-let isAvailable   = false;
-let driverMap     = null;
-let driverMarker  = null;
-let watchId       = null;
-let lastLat       = null;
-let lastLng       = null;
+let currentDriver   = null;
+let currentPhone    = null;
+let isAvailable     = false;
+let driverMap       = null;
+let driverMarker    = null;
+let watchId         = null;
+let lastLat         = null;
+let lastLng         = null;
+let passengerMarker = null;
+let presenceChannel = null;
 
 // ── DOM refs ─────────────────────────────────────────────────
 const loginScreen     = document.getElementById('login-screen');
 const dashboardScreen = document.getElementById('dashboard-screen');
-const loginForm       = document.getElementById('login-form');
-const phoneInput      = document.getElementById('phone-input');
-const loginBtn        = document.getElementById('login-btn');
-const errorMsg        = document.getElementById('error-msg');
 const statusToggle    = document.getElementById('status-toggle');
 const toggleIcon      = document.getElementById('toggle-icon');
 const toggleLabel     = document.getElementById('toggle-label');
@@ -30,41 +28,44 @@ const logoutBtn       = document.getElementById('logout-btn');
 const gpsDot          = document.getElementById('gps-dot');
 const gpsText         = document.getElementById('gps-text');
 
-document.getElementById('loading-overlay').classList.add('hidden');
+// ── Connexion automatique via session ────────────────────────
+(async () => {
+  const overlay = document.getElementById('loading-overlay');
 
-// ── Connexion ────────────────────────────────────────────────
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+  try {
+    const raw = localStorage.getItem('pnr_driver');
+    const session = raw ? JSON.parse(raw) : null;
 
-  const phone = phoneInput.value.trim().replace(/\s/g, '');
-  if (!phone || phone.length < 9) {
-    showError('Entrez un numéro valide (ex: 242XXXXXXXXX)');
-    return;
+    if (!session?.telephone) {
+      window.location.replace('driver-auth.html');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('drivers')
+      .select('*')
+      .eq('telephone', session.telephone)
+      .single();
+
+    if (error || !data) {
+      localStorage.removeItem('pnr_driver');
+      window.location.replace('driver-auth.html');
+      return;
+    }
+
+    currentDriver = data;
+    currentPhone  = session.telephone;
+    isAvailable   = data.disponible ?? false;
+
+    overlay.classList.add('hidden');
+    loginScreen.style.display = 'none';
+    loadDashboard();
+
+  } catch {
+    localStorage.removeItem('pnr_driver');
+    window.location.replace('driver-auth.html');
   }
-
-  hideError();
-  loginBtn.disabled = true;
-  loginBtn.textContent = 'Recherche en cours…';
-
-  const { data, error } = await supabase
-    .from('drivers')
-    .select('*')
-    .eq('id', phone)
-    .single();
-
-  if (error || !data) {
-    showError('❌ Chauffeur non enregistré. Contactez l\'administrateur.');
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'Se connecter';
-    return;
-  }
-
-  currentDriver = data;
-  currentPhone  = phone;
-  isAvailable   = data.disponible ?? false;
-
-  loadDashboard();
-});
+})();
 
 // ── Tableau de bord ──────────────────────────────────────────
 function loadDashboard() {
@@ -87,6 +88,8 @@ function loadDashboard() {
   initDriverMap();
   startGPS();
   startRideWatch();
+  initHistorySection();
+  joinPresence();
 }
 
 // ── Toggle ───────────────────────────────────────────────────
@@ -210,6 +213,24 @@ function stopGPS() {
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
+  }
+}
+
+// ── Présence temps réel ───────────────────────────────────────
+function joinPresence() {
+  presenceChannel = supabase.channel('drivers-online');
+  presenceChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      await presenceChannel.track({ driver_id: currentPhone });
+    }
+  });
+}
+
+async function leavePresence() {
+  if (presenceChannel) {
+    await presenceChannel.untrack();
+    await supabase.removeChannel(presenceChannel);
+    presenceChannel = null;
   }
 }
 
@@ -382,20 +403,65 @@ function showProfile() {
 }
 
 // ── Demandes de course ────────────────────────────────────────
-const ridesMap = new Map(); // rideId → statut connu
+const ridesMap       = new Map(); // rideId → statut connu
+let   historyPage    = 0;
+const HISTORY_PER_PAGE = 3;
 
-function startRideWatch() {
+async function startRideWatch() {
   watchIncomingRides(currentPhone, onRideEvent);
+  const history = await loadDriverRideHistory(currentPhone);
+  history.forEach(r => ridesMap.set(r.id, r));
+  renderHistory();
+}
+
+function showPassengerOnMap(lat, lng) {
+  if (!driverMap) return;
+
+  if (passengerMarker) {
+    passengerMarker.setLatLng([lat, lng]);
+  } else {
+    passengerMarker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="font-size:2rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">📍</div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+      })
+    }).addTo(driverMap);
+    passengerMarker.bindPopup('Position du passager').openPopup();
+  }
+
+  // Adapter la vue pour montrer driver + passager
+  if (driverMarker) {
+    const bounds = L.latLngBounds([driverMarker.getLatLng(), [lat, lng]]);
+    driverMap.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+  } else {
+    driverMap.setView([lat, lng], 15);
+  }
+}
+
+function removePassengerMarker() {
+  if (passengerMarker) {
+    passengerMarker.remove();
+    passengerMarker = null;
+  }
 }
 
 function onRideEvent(ride) {
-  const isNew    = !ridesMap.has(ride.id);
+  const isNew     = !ridesMap.has(ride.id);
   const isPending = ride.status === 'pending';
 
   ridesMap.set(ride.id, ride);
-  renderRidesList();
+  renderActiveRide();
+  renderHistory();
 
-  // Alerte sensorielle uniquement pour une nouvelle demande entrante
+  if (isPending && ride.passenger_lat && ride.passenger_lng) {
+    showPassengerOnMap(ride.passenger_lat, ride.passenger_lng);
+  } else if (!isPending) {
+    const hasPending = [...ridesMap.values()].some(r => r.status === 'pending' && r.passenger_lat && r.passenger_lng);
+    if (!hasPending) removePassengerMarker();
+  }
+
   if (isNew && isPending) {
     playRequestBeep();
     vibrateRequest();
@@ -437,38 +503,33 @@ function vibrateRequest() {
   navigator.vibrate([200, 100, 200]);
 }
 
-function renderRidesList() {
-  const listEl  = document.getElementById('rides-list');
-  const badgeEl = document.querySelector('.rides-section-badge');
-  if (!listEl) return;
+// ── Course en cours (pending / accepted) ─────────────────────
+function renderActiveRide() {
+  const section   = document.getElementById('active-ride-section');
+  const container = document.getElementById('active-ride-container');
+  const badgeEl   = document.getElementById('active-ride-badge');
+  if (!section || !container) return;
 
-  const rides = [...ridesMap.values()]
-    .sort((a, b) => {
-      if (a.status === 'pending' && b.status !== 'pending') return -1;
-      if (b.status === 'pending' && a.status !== 'pending') return 1;
-      return new Date(b.created_at) - new Date(a.created_at);
-    })
-    .slice(0, 5);
+  const active = [...ridesMap.values()]
+    .filter(r => r.status === 'pending' || r.status === 'accepted')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-  const pendingCount = rides.filter(r => r.status === 'pending').length;
-  if (badgeEl) {
-    badgeEl.textContent = pendingCount;
-    badgeEl.classList.toggle('visible', pendingCount > 0);
-  }
-
-  if (rides.length === 0) {
-    listEl.innerHTML = `
-      <div class="no-rides-msg">
-        <div class="no-rides-icon">🛎️</div>
-        <p class="no-rides-text">Aucune demande pour l'instant</p>
-      </div>`;
+  if (active.length === 0) {
+    section.style.display = 'none';
     return;
   }
 
-  const statusLabel = { pending: 'En attente', accepted: 'Acceptée', rejected: 'Refusée', cancelled: 'Annulée' };
-  const statusIcon  = { pending: '⏳', accepted: '✅', rejected: '❌', cancelled: '🚫' };
+  section.style.display = '';
+  const pendingCount = active.filter(r => r.status === 'pending').length;
+  if (badgeEl) {
+    badgeEl.textContent    = pendingCount;
+    badgeEl.style.display  = pendingCount > 0 ? 'inline-block' : 'none';
+  }
 
-  listEl.innerHTML = rides.map(ride => {
+  const statusLabel = { pending: 'En attente', accepted: 'Acceptée' };
+  const statusIcon  = { pending: '⏳', accepted: '✅' };
+
+  container.innerHTML = active.map(ride => {
     const initiale = (ride.passenger_id || '?').charAt(0).toUpperCase();
     const timeStr  = new Date(ride.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const label    = statusLabel[ride.status] || ride.status;
@@ -507,19 +568,105 @@ function renderRidesList() {
       </div>`;
   }).join('');
 
-  listEl.querySelectorAll('.btn-accept').forEach(btn => {
+  container.querySelectorAll('.btn-accept').forEach(btn => {
     btn.addEventListener('click', () => handleRideAction(btn.dataset.id, 'accepted'));
   });
-  listEl.querySelectorAll('.btn-reject').forEach(btn => {
+  container.querySelectorAll('.btn-reject').forEach(btn => {
     btn.addEventListener('click', () => handleRideAction(btn.dataset.id, 'rejected'));
+  });
+}
+
+// ── Historique des courses (rejected / cancelled) ─────────────
+function renderHistory() {
+  const listEl   = document.getElementById('history-list');
+  const countEl  = document.getElementById('history-count');
+  const pagEl    = document.getElementById('history-pagination');
+  const pageInfo = document.getElementById('history-page-info');
+  const prevBtn  = document.getElementById('history-prev');
+  const nextBtn  = document.getElementById('history-next');
+  if (!listEl) return;
+
+  const history = [...ridesMap.values()]
+    .filter(r => r.status === 'rejected' || r.status === 'cancelled')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const totalPages = Math.max(1, Math.ceil(history.length / HISTORY_PER_PAGE));
+  historyPage      = Math.min(historyPage, totalPages - 1);
+
+  if (countEl) countEl.textContent = history.length > 0 ? String(history.length) : '';
+
+  if (history.length === 0) {
+    listEl.innerHTML = `
+      <div class="no-rides-msg">
+        <div class="no-rides-icon">📋</div>
+        <p class="no-rides-text">Aucune course dans l'historique</p>
+      </div>`;
+    if (pagEl) pagEl.style.display = 'none';
+    return;
+  }
+
+  const page        = history.slice(historyPage * HISTORY_PER_PAGE, (historyPage + 1) * HISTORY_PER_PAGE);
+  const statusLabel = { accepted: 'Acceptée', rejected: 'Refusée', cancelled: 'Annulée' };
+  const statusIcon  = { accepted: '✅', rejected: '❌', cancelled: '🚫' };
+
+  listEl.innerHTML = page.map(ride => {
+    const initiale = (ride.passenger_id || '?').charAt(0).toUpperCase();
+    const dateStr  = new Date(ride.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    const timeStr  = new Date(ride.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const label    = statusLabel[ride.status] || ride.status;
+
+    return `
+      <div class="ride-card ${ride.status}" data-ride-id="${ride.id}">
+        <div class="ride-card-top"></div>
+        <div class="ride-card-body">
+          <div class="ride-card-row" style="margin-bottom:0">
+            <div class="ride-card-avatar">${initiale}</div>
+            <div class="ride-card-info">
+              <div class="ride-card-passenger">${ride.passenger_id}</div>
+              <div class="ride-card-meta">
+                <span>${dateStr} ${timeStr}</span>
+                <span class="ride-card-meta-dot"></span>
+                <span>${statusIcon[ride.status] || ''} ${label}</span>
+              </div>
+            </div>
+            <span class="ride-card-status ${ride.status}">${label}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (pagEl) {
+    pagEl.style.display = totalPages > 1 ? 'flex' : 'none';
+    if (pageInfo) pageInfo.textContent = `${historyPage + 1} / ${totalPages}`;
+    if (prevBtn)  prevBtn.disabled     = historyPage === 0;
+    if (nextBtn)  nextBtn.disabled     = historyPage >= totalPages - 1;
+  }
+}
+
+// ── Init section historique (toggle + pagination) ─────────────
+function initHistorySection() {
+  const toggle = document.getElementById('history-toggle');
+  const body   = document.getElementById('history-body');
+  if (!toggle || !body) return;
+
+  toggle.addEventListener('click', () => {
+    const isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    toggle.setAttribute('aria-expanded', String(!isOpen));
+  });
+
+  document.getElementById('history-prev').addEventListener('click', () => {
+    if (historyPage > 0) { historyPage--; renderHistory(); }
+  });
+  document.getElementById('history-next').addEventListener('click', () => {
+    historyPage++;
+    renderHistory();
   });
 }
 
 async function handleRideAction(rideId, status) {
   const card = document.querySelector(`[data-ride-id="${rideId}"]`);
-  if (card) {
-    card.querySelectorAll('button').forEach(b => { b.disabled = true; });
-  }
+  if (card) card.querySelectorAll('button').forEach(b => { b.disabled = true; });
   try {
     await updateRideStatus(rideId, status);
     const ride = ridesMap.get(rideId);
@@ -527,7 +674,8 @@ async function handleRideAction(rideId, status) {
       ride.status = status;
       ridesMap.set(rideId, ride);
     }
-    renderRidesList();
+    renderActiveRide();
+    renderHistory();
   } catch (err) {
     console.error('Erreur mise à jour course:', err);
     if (card) card.querySelectorAll('button').forEach(b => { b.disabled = false; });
@@ -535,53 +683,30 @@ async function handleRideAction(rideId, status) {
 }
 
 // ── Déconnexion ───────────────────────────────────────────────
-function doLogout() {
-  // 1. Retour visuel immédiat — ne pas attendre le réseau
-  document.getElementById('profile-screen').style.display = 'none';
-  dashboardScreen.classList.remove('active');
-  loginScreen.style.display = '';
-  phoneInput.value = '';
-  loginBtn.disabled = false;
-  loginBtn.textContent = 'Se connecter';
-  gpsDot.classList.remove('active');
-  gpsText.textContent = 'En attente du GPS…';
+async function doLogout() {
+  // 1. Quitter la présence immédiatement (marqueur rouge côté passager)
+  await leavePresence();
 
   // 2. Nettoyage GPS et carte
   stopGPS();
   if (driverMap) {
     driverMap.remove();
-    driverMap   = null;
+    driverMap    = null;
     driverMarker = null;
   }
 
-  // 3. Mise à jour Supabase en arrière-plan (n'attend pas)
+  // 2. Mise à jour Supabase en arrière-plan (n'attend pas)
   const phoneToUpdate = currentPhone;
   if (phoneToUpdate) {
-    supabase.from('drivers')
-      .update({ disponible: false })
-      .eq('id', phoneToUpdate)
-      .catch(() => {});
+    Promise.resolve(
+      supabase.from('drivers').update({ disponible: false }).eq('id', phoneToUpdate)
+    ).catch(() => {});
   }
 
-  // 4. Réinitialiser l'état
-  currentDriver = null;
-  currentPhone  = null;
-  isAvailable   = false;
-  lastLat       = null;
-  lastLng       = null;
-  ridesMap.clear();
-  const listEl = document.getElementById('rides-list');
-  if (listEl) listEl.innerHTML = '<p class="no-rides-msg">Aucune demande en attente</p>';
+  // 3. Effacer la session et rediriger vers la page d'authentification
+  localStorage.removeItem('pnr_driver');
+  window.location.replace('driver-auth.html');
 }
 
 logoutBtn.addEventListener('click', doLogout);
 
-// ── Helpers ───────────────────────────────────────────────────
-function showError(msg) {
-  errorMsg.textContent = msg;
-  errorMsg.classList.add('show');
-}
-function hideError() {
-  errorMsg.classList.remove('show');
-}
-phoneInput.addEventListener('input', hideError);

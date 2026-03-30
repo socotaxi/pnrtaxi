@@ -2591,6 +2591,87 @@ html, body {
 .btn-reject:active { transform: scale(0.96); }
 .btn-reject:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Historique des courses ───────────────────── */
+.history-section {
+  margin: 12px 16px 0;
+}
+
+.history-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  background: var(--bg-card);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+.history-section-header:active { opacity: 0.8; }
+
+.history-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.history-chevron {
+  margin-left: auto;
+  color: var(--text-muted);
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+}
+.history-section-header[aria-expanded="true"] .history-chevron {
+  transform: rotate(180deg);
+}
+
+.history-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+.history-body.open {
+  max-height: 1000px;
+}
+
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 0 4px;
+}
+.history-page-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.history-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.history-page-btn:not(:disabled):active { transform: scale(0.93); }
+
+.history-page-info {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: center;
+}
+
 /* État vide */
 .no-rides-msg {
   text-align: center;

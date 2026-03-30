@@ -110,16 +110,30 @@
       </div>
     </div>
 
-    <!-- Demandes de course -->
-    <div class="rides-section" id="rides-section">
+    <!-- Course en cours -->
+    <div class="rides-section" id="active-ride-section" style="display:none">
       <div class="rides-section-header">
-        <span class="rides-section-label">Demandes de course</span>
-        <span class="rides-section-badge">0</span>
+        <span class="rides-section-label">Course en cours</span>
+        <span class="rides-section-badge visible" id="active-ride-badge">0</span>
       </div>
-      <div id="rides-list">
-        <div class="no-rides-msg">
-          <div class="no-rides-icon">🛎️</div>
-          <p class="no-rides-text">Aucune demande pour l'instant</p>
+      <div id="active-ride-container"></div>
+    </div>
+
+    <!-- Historique des courses -->
+    <div class="history-section" id="history-section">
+      <button class="history-section-header" id="history-toggle" aria-expanded="false">
+        <span class="rides-section-label">Historique des courses</span>
+        <span class="history-count" id="history-count"></span>
+        <svg class="history-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div class="history-body" id="history-body">
+        <div id="history-list"></div>
+        <div class="history-pagination" id="history-pagination" style="display:none">
+          <button class="history-page-btn" id="history-prev">&#8249;</button>
+          <span class="history-page-info" id="history-page-info">1 / 1</span>
+          <button class="history-page-btn" id="history-next">&#8250;</button>
         </div>
       </div>
     </div>

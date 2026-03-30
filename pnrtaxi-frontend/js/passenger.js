@@ -8,9 +8,17 @@ import { initAuth, clearSession } from './auth.js';
 import { requestRide, updateRideStatus, watchActiveRide } from './rides.js';
 
 // ── Constantes ──────────────────────────────────────────────
-const CENTER          = { lat: -4.7792, lng: 11.8650 };
-const ZOOM            = 13;
-const ZONE_RADIUS_KM  = 5; // rayon de la zone en km
+const CENTER             = { lat: -4.7792, lng: 11.8650 };
+const ZOOM               = 13;
+const ZONE_RADIUS_KM     = 5;   // rayon de la zone en km
+// IDs des drivers dont la connexion WebSocket est active (Supabase Presence)
+const onlineDriverIds = new Set();
+
+// Retourne true uniquement si le driver est disponible ET sa connexion est active
+function isDriverConnected(driver) {
+  if (!driver.disponible) return false;
+  return onlineDriverIds.has(driver.id);
+}
 
 // ── État global ──────────────────────────────────────────────
 let map           = null;
@@ -136,37 +144,38 @@ function isInZone(lat, lng) {
 
 // ── Marqueurs chauffeurs ──────────────────────────────────────
 function upsertDriverMarker(driver) {
-  const { id, lat, lng, disponible } = driver;
+  const { id, lat, lng } = driver;
   driversData.set(id, driver); // toujours mémoriser les données brutes
   if (!lat || !lng) return;
 
-  const inZone = isInZone(lat, lng);
+  const inZone    = isInZone(lat, lng);
+  const connected = isDriverConnected(driver);
 
-  // Si le marqueur existe déjà et que la disponibilité n'a pas changé : mise à jour en place
+  // Si le marqueur existe déjà et que l'état de connexion n'a pas changé : mise à jour en place
   if (driverMarkers.has(id)) {
     const m = driverMarkers.get(id);
-    if (inZone && m._wasAvailable === disponible) {
+    if (inZone && m._wasAvailable === connected) {
       m.setLatLng([lat, lng]);
-      m.setIcon(makeCarIcon(disponible));
+      m.setIcon(makeCarIcon(connected));
       m._driverData = driver;
       return;
     }
-    // Sinon (hors zone ou changement de dispo) : supprimer et recréer
+    // Sinon (hors zone ou changement d'état) : supprimer et recréer
     map.removeLayer(m);
     driverMarkers.delete(id);
   }
 
   if (!inZone) return;
 
-  // Créer le marqueur — interactif uniquement si disponible
+  // Créer le marqueur — interactif uniquement si connecté
   const m = L.marker([lat, lng], {
-    icon: makeCarIcon(disponible),
-    interactive: disponible,
+    icon: makeCarIcon(connected),
+    interactive: connected,
   }).addTo(map);
-  m._driverData  = driver;
-  m._wasAvailable = disponible;
+  m._driverData   = driver;
+  m._wasAvailable = connected;
 
-  if (disponible) {
+  if (connected) {
     m.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
       openDriverPanel(m._driverData);
@@ -195,6 +204,29 @@ function updateCount() {
   driverMarkers.forEach(m => { if (m._wasAvailable) n++; });
   document.getElementById('driver-count').textContent =
     `${n} chauffeur${n > 1 ? 's' : ''} disponible${n > 1 ? 's' : ''} à proximité`;
+}
+
+// ── Présence temps réel (connexion/déconnexion instantanée) ──
+function watchDriverPresence() {
+  const channel = supabase.channel('drivers-online');
+
+  channel
+    .on('presence', { event: 'sync' }, () => {
+      onlineDriverIds.clear();
+      Object.values(channel.presenceState()).flat().forEach(p => {
+        if (p.driver_id) onlineDriverIds.add(p.driver_id);
+      });
+      refreshMarkers();
+    })
+    .on('presence', { event: 'join' }, ({ newPresences }) => {
+      newPresences.forEach(p => { if (p.driver_id) onlineDriverIds.add(p.driver_id); });
+      refreshMarkers();
+    })
+    .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+      leftPresences.forEach(p => { if (p.driver_id) onlineDriverIds.delete(p.driver_id); });
+      refreshMarkers();
+    })
+    .subscribe();
 }
 
 // ── Temps réel Supabase ───────────────────────────────────────
@@ -406,7 +438,7 @@ function renderRideButton(driver) {
   const el = document.getElementById('panel-ride-request');
   if (!el) return;
 
-  if (!driver.disponible) { el.innerHTML = ''; return; }
+  if (!isDriverConnected(driver)) { el.innerHTML = ''; return; }
 
   const passengerId = session?.telephone || session?.email;
   if (!passengerId) { el.innerHTML = ''; return; }
@@ -481,12 +513,15 @@ function renderWhatsAppCta(driver) {
   const ctaEl = document.getElementById('panel-cta');
   if (!ctaEl) return;
 
-  if (!driver.disponible) {
+  if (!isDriverConnected(driver)) {
+    const msg = driver.disponible
+      ? '🔌 Ce chauffeur est hors ligne'
+      : '❌ Ce chauffeur n\'est pas disponible';
     ctaEl.innerHTML = `
       <div style="text-align:center;padding:16px;
         background:rgba(255,68,68,0.08);border:1px solid rgba(255,68,68,0.18);
         border-radius:14px;color:var(--red);font-weight:600;font-size:0.9rem;">
-        ❌ Ce chauffeur n'est pas disponible
+        ${msg}
       </div>`;
     return;
   }
@@ -538,8 +573,9 @@ function openDriverPanel(driver) {
 
   // Disponibilité
   const availEl = document.getElementById('panel-availability');
-  availEl.textContent = driver.disponible ? '● Disponible' : '● Non disponible';
-  availEl.className   = `dp-chip ${driver.disponible ? 'available' : 'unavailable'}`;
+  const connected = isDriverConnected(driver);
+  availEl.textContent = connected ? '● Disponible' : (driver.disponible ? '● Hors ligne' : '● Non disponible');
+  availEl.className   = `dp-chip ${connected ? 'available' : 'unavailable'}`;
 
   renderWhatsAppCta(driver);
   renderRideButton(driver);
@@ -607,6 +643,7 @@ function showMap() {
     initMap();
     requestAnimationFrame(() => map.invalidateSize());
     locateUser();
+    watchDriverPresence();
     watchDrivers();
 
     document.getElementById('panel-close').addEventListener('click', closeDriverPanel);
