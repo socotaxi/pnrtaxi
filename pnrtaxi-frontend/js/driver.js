@@ -430,10 +430,10 @@ function vibrateRequest() {
 }
 
 function renderRidesList() {
-  const listEl = document.getElementById('rides-list');
+  const listEl  = document.getElementById('rides-list');
+  const badgeEl = document.querySelector('.rides-section-badge');
   if (!listEl) return;
 
-  // Regrouper : pending en tête, puis les autres (max 5 récents)
   const rides = [...ridesMap.values()]
     .sort((a, b) => {
       if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -442,32 +442,63 @@ function renderRidesList() {
     })
     .slice(0, 5);
 
+  const pendingCount = rides.filter(r => r.status === 'pending').length;
+  if (badgeEl) {
+    badgeEl.textContent = pendingCount;
+    badgeEl.classList.toggle('visible', pendingCount > 0);
+  }
+
   if (rides.length === 0) {
-    listEl.innerHTML = '<p class="no-rides-msg">Aucune demande en attente</p>';
+    listEl.innerHTML = `
+      <div class="no-rides-msg">
+        <div class="no-rides-icon">🛎️</div>
+        <p class="no-rides-text">Aucune demande pour l'instant</p>
+      </div>`;
     return;
   }
 
+  const statusLabel = { pending: 'En attente', accepted: 'Acceptée', rejected: 'Refusée', cancelled: 'Annulée' };
+  const statusIcon  = { pending: '⏳', accepted: '✅', rejected: '❌', cancelled: '🚫' };
+
   listEl.innerHTML = rides.map(ride => {
-    const statusLabel = { pending: 'En attente', accepted: 'Acceptée', rejected: 'Refusée', cancelled: 'Annulée' }[ride.status] || ride.status;
-    const timeStr = new Date(ride.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const initiale = (ride.passenger_id || '?').charAt(0).toUpperCase();
+    const timeStr  = new Date(ride.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const label    = statusLabel[ride.status] || ride.status;
+
     const actions = ride.status === 'pending' ? `
+      <div class="ride-card-divider"></div>
       <div class="ride-card-actions">
-        <button class="btn-accept" data-id="${ride.id}">✅ Accepter</button>
-        <button class="btn-reject" data-id="${ride.id}">❌ Refuser</button>
+        <button class="btn-accept" data-id="${ride.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Accepter
+        </button>
+        <button class="btn-reject" data-id="${ride.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Refuser
+        </button>
       </div>` : '';
 
     return `
       <div class="ride-card ${ride.status}" data-ride-id="${ride.id}">
-        <div class="ride-card-passenger">
-          📱 ${ride.passenger_id}
-          <span class="ride-card-status ${ride.status}">${statusLabel}</span>
+        <div class="ride-card-top"></div>
+        <div class="ride-card-body">
+          <div class="ride-card-row">
+            <div class="ride-card-avatar">${initiale}</div>
+            <div class="ride-card-info">
+              <div class="ride-card-passenger">${ride.passenger_id}</div>
+              <div class="ride-card-meta">
+                <span>${timeStr}</span>
+                <span class="ride-card-meta-dot"></span>
+                <span>${statusIcon[ride.status] || ''} ${label}</span>
+              </div>
+            </div>
+            <span class="ride-card-status ${ride.status}">${label}</span>
+          </div>
+          ${actions}
         </div>
-        <div class="ride-card-meta">Reçue à ${timeStr}</div>
-        ${actions}
       </div>`;
   }).join('');
 
-  // Attacher les listeners accept/reject
   listEl.querySelectorAll('.btn-accept').forEach(btn => {
     btn.addEventListener('click', () => handleRideAction(btn.dataset.id, 'accepted'));
   });

@@ -354,11 +354,23 @@ function renderRideButton(driver) {
   // Course active sur CE chauffeur
   if (activeRide && activeRide.driver_id === driver.id) {
     if (activeRide.status === 'pending') {
-      el.innerHTML = `<button class="btn-request-ride pending" disabled>⏳ En attente…</button>`;
+      el.innerHTML = `
+        <div class="ride-request-wrap">
+          <button class="btn-request-ride pending" disabled>
+            <span class="ride-spinner"></span>
+            En attente de confirmation…
+          </button>
+          <div class="ride-progress-bar"><div class="ride-progress-bar-fill"></div></div>
+        </div>`;
       return;
     }
     if (activeRide.status === 'accepted') {
-      el.innerHTML = `<button class="btn-request-ride accepted" disabled>✅ Course acceptée</button>`;
+      el.innerHTML = `
+        <div class="ride-request-wrap">
+          <button class="btn-request-ride accepted" disabled>
+            ✅ Course acceptée !
+          </button>
+        </div>`;
       return;
     }
   }
@@ -366,15 +378,23 @@ function renderRideButton(driver) {
   // Course active sur un AUTRE chauffeur
   if (activeRide && activeRide.driver_id !== driver.id &&
       (activeRide.status === 'pending' || activeRide.status === 'accepted')) {
-    el.innerHTML = `<button class="btn-request-ride" disabled>Course déjà en cours</button>`;
+    el.innerHTML = `
+      <div class="ride-request-wrap">
+        <button class="btn-request-ride" disabled>🚫 Course déjà en cours</button>
+      </div>`;
     return;
   }
 
-  el.innerHTML = `<button class="btn-request-ride" id="btn-request-ride-action">🚖 Demander ce taxi</button>`;
+  el.innerHTML = `
+    <div class="ride-request-wrap">
+      <button class="btn-request-ride" id="btn-request-ride-action">
+        🚖 Demander ce taxi
+      </button>
+    </div>`;
   document.getElementById('btn-request-ride-action').addEventListener('click', async () => {
     const btn = document.getElementById('btn-request-ride-action');
     btn.disabled = true;
-    btn.textContent = '⏳ Envoi…';
+    btn.innerHTML = '<span class="ride-spinner"></span> Envoi en cours…';
     try {
       const ride = await requestRide({
         passengerId,
@@ -386,7 +406,7 @@ function renderRideButton(driver) {
     } catch (err) {
       console.error('Erreur demande de course:', err);
       btn.disabled = false;
-      btn.textContent = '🚖 Demander ce taxi';
+      btn.innerHTML = '🚖 Demander ce taxi';
       showToast('❌ Impossible d\'envoyer la demande', 3000);
     }
   });

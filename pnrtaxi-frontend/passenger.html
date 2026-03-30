@@ -489,12 +489,15 @@
      BANDEAU STATUT DE COURSE
 ══════════════════════════════════════════ -->
 <div id="ride-banner" class="ride-banner hidden" role="status" aria-live="polite">
-  <span class="ride-banner-icon" id="ride-banner-icon">⏳</span>
-  <div class="ride-banner-body">
-    <div class="ride-banner-title" id="ride-banner-title">En attente de confirmation…</div>
-    <div class="ride-banner-driver" id="ride-banner-driver">—</div>
+  <div class="ride-banner-progress"><div class="ride-banner-progress-fill"></div></div>
+  <div class="ride-banner-inner">
+    <span class="ride-banner-icon" id="ride-banner-icon">⏳</span>
+    <div class="ride-banner-body">
+      <div class="ride-banner-title" id="ride-banner-title">En attente de confirmation…</div>
+      <div class="ride-banner-driver" id="ride-banner-driver">—</div>
+    </div>
+    <button class="ride-banner-cancel" id="ride-banner-cancel">Annuler</button>
   </div>
-  <button class="ride-banner-cancel" id="ride-banner-cancel">Annuler</button>
 </div>
 
 <!-- Menu utilisateur -->

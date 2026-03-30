@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(py --version)"
+      "Bash(py --version)",
+      "Bash(node --check driver.js)"
     ]
   }
 }

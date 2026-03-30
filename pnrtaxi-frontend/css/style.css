@@ -2181,78 +2181,193 @@ html, body {
 .prof-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ============================================================
-   RIDES — Demande de course
+   RIDES — Demande de course (Design Pro)
    ============================================================ */
 
-/* ── Bouton "Demander ce taxi" (panneau chauffeur) ── */
+/* ════════════════════════════════════════════
+   PASSAGER — Bouton "Demander ce taxi"
+   ════════════════════════════════════════════ */
+.ride-request-wrap {
+  margin-bottom: 12px;
+}
+
+/* Bouton principal — état par défaut */
 .btn-request-ride {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 14px 20px;
-  background: var(--brand-600);
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--brand-600) 0%, #7c3aed 100%);
   color: #fff;
   border: none;
-  border-radius: 14px;
+  border-radius: 16px;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: opacity 0.2s, background 0.2s;
-  margin-bottom: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(79,70,229,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
 }
-.btn-request-ride:hover   { opacity: 0.9; }
-.btn-request-ride:disabled {
-  background: var(--bg-input);
-  color: var(--text-muted);
-  cursor: not-allowed;
+.btn-request-ride::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: ride-shimmer 2.2s infinite;
 }
+@keyframes ride-shimmer {
+  0%   { transform: translateX(-100%); }
+  60%  { transform: translateX(100%); }
+  100% { transform: translateX(100%); }
+}
+.btn-request-ride:active { transform: scale(0.97); box-shadow: 0 2px 8px rgba(79,70,229,0.2); }
+
+/* État pending */
 .btn-request-ride.pending {
-  background: var(--amber-600);
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+  box-shadow: 0 4px 16px rgba(217,119,6,0.3);
+  cursor: default;
 }
-.btn-request-ride.accepted {
-  background: var(--green);
+.btn-request-ride.pending::after { display: none; }
+
+/* Spinner pending */
+.ride-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ride-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes ride-spin {
+  to { transform: rotate(360deg); }
 }
 
-/* ── Bandeau statut de course (passager) ── */
+/* Barre de progression pending */
+.ride-progress-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 0 0 16px 16px;
+  overflow: hidden;
+  margin-top: -3px;
+}
+.ride-progress-bar-fill {
+  height: 100%;
+  background: rgba(255,255,255,0.7);
+  border-radius: 2px;
+  animation: ride-progress 2s ease-in-out infinite alternate;
+}
+@keyframes ride-progress {
+  from { width: 15%; margin-left: 0; }
+  to   { width: 55%; margin-left: 45%; }
+}
+
+/* État accepted */
+.btn-request-ride.accepted {
+  background: linear-gradient(135deg, #059669 0%, var(--green) 100%);
+  box-shadow: 0 4px 16px rgba(16,185,129,0.3);
+  cursor: default;
+}
+.btn-request-ride.accepted::after { display: none; }
+
+/* État disabled générique */
+.btn-request-ride:disabled:not(.pending):not(.accepted) {
+  background: var(--bg-input);
+  color: var(--text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.btn-request-ride:disabled:not(.pending):not(.accepted)::after { display: none; }
+
+/* ════════════════════════════════════════════
+   PASSAGER — Bandeau statut de course
+   ════════════════════════════════════════════ */
 .ride-banner {
   position: fixed;
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  bottom: calc(80px + env(safe-area-inset-bottom));
   left: 12px;
   right: 12px;
-  background: var(--bg-card);
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.14);
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  border-radius: 20px;
+  padding: 0;
   z-index: 1100;
-  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
-  border-left: 4px solid var(--brand-600);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s;
 }
 .ride-banner.hidden {
-  transform: translateY(20px);
+  transform: translateY(32px);
   opacity: 0;
   pointer-events: none;
 }
-.ride-banner.accepted { border-left-color: var(--green); }
-.ride-banner.rejected { border-left-color: var(--red); }
 
-.ride-banner-icon { font-size: 1.6rem; flex-shrink: 0; }
+/* Fond selon statut */
+.ride-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  background: #fff;
+}
+.ride-banner               .ride-banner-inner { border-left: 5px solid var(--brand-600); }
+.ride-banner.accepted      .ride-banner-inner { border-left-color: var(--green); background: #f0fdf4; }
+.ride-banner.rejected      .ride-banner-inner { border-left-color: var(--red);   background: #fef2f2; }
 
+/* Barre de progression infinie (pending uniquement) */
+.ride-banner-progress {
+  height: 3px;
+  background: var(--brand-100);
+  overflow: hidden;
+  display: none;
+}
+.ride-banner .ride-banner-progress        { display: block; }
+.ride-banner.accepted .ride-banner-progress,
+.ride-banner.rejected .ride-banner-progress { display: none; }
+
+.ride-banner-progress-fill {
+  height: 100%;
+  width: 40%;
+  background: var(--brand-600);
+  border-radius: 2px;
+  animation: banner-progress 1.6s ease-in-out infinite;
+}
+@keyframes banner-progress {
+  0%   { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
+/* Icône animée */
+.ride-banner-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.ride-banner.accepted .ride-banner-icon { animation: banner-pop 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes banner-pop {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+/* Corps texte */
 .ride-banner-body { flex: 1; min-width: 0; }
 .ride-banner-title {
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: 800;
+  font-size: 0.92rem;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ride-banner.accepted .ride-banner-title { color: var(--green-dark); }
+.ride-banner.rejected .ride-banner-title { color: var(--red-dark); }
+
 .ride-banner-driver {
-  font-size: 0.78rem;
+  font-size: 0.77rem;
   color: var(--text-muted);
   margin-top: 2px;
   white-space: nowrap;
@@ -2260,111 +2375,209 @@ html, body {
   text-overflow: ellipsis;
 }
 
+/* Bouton action */
 .ride-banner-cancel {
   flex-shrink: 0;
-  background: var(--red-50);
-  color: var(--red);
   border: none;
-  border-radius: 10px;
-  padding: 6px 12px;
+  border-radius: 12px;
+  padding: 8px 14px;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity 0.15s, transform 0.1s;
+  background: rgba(0,0,0,0.06);
+  color: var(--text-primary);
 }
-.ride-banner-cancel:hover { opacity: 0.8; }
+.ride-banner.accepted .ride-banner-cancel { background: var(--green-100); color: var(--green-dark); }
+.ride-banner.rejected .ride-banner-cancel { background: var(--red-50);    color: var(--red-dark); }
+.ride-banner-cancel:hover  { opacity: 0.8; }
+.ride-banner-cancel:active { transform: scale(0.96); }
 
-/* ── Section demandes de course (chauffeur) ── */
+/* ════════════════════════════════════════════
+   CHAUFFEUR — Section demandes
+   ════════════════════════════════════════════ */
 .rides-section {
   margin: 16px 16px 0;
 }
-.rides-section-label {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 10px;
-}
 
-.ride-card {
-  background: var(--bg-card);
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  border-left: 4px solid var(--brand-600);
-  animation: ride-in 0.3s cubic-bezier(0.4,0,0.2,1);
-}
-.ride-card.accepted { border-left-color: var(--green); }
-.ride-card.rejected { border-left-color: var(--red); opacity: 0.6; }
-.ride-card.cancelled { border-left-color: var(--text-muted); opacity: 0.5; }
-
-@keyframes ride-in {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.ride-card-passenger {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-.ride-card-meta {
-  font-size: 0.78rem;
-  color: var(--text-muted);
+.rides-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
 }
-.ride-card-status {
-  display: inline-block;
+.rides-section-label {
   font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.rides-section-badge {
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 0.7rem;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 20px;
-  margin-left: 6px;
+  display: none;
 }
-.ride-card-status.pending  { background: var(--amber-50); color: var(--amber-800); }
-.ride-card-status.accepted { background: var(--green-50); color: var(--green-dark); }
-.ride-card-status.rejected { background: var(--red-50);   color: var(--red-dark); }
+.rides-section-badge.visible { display: inline-block; }
 
-.ride-card-actions {
+/* Carte de demande */
+.ride-card {
+  background: var(--bg-card);
+  border-radius: 18px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  overflow: hidden;
+  animation: ride-in 0.35s cubic-bezier(0.34,1.2,0.64,1);
+  border: 1.5px solid transparent;
+}
+.ride-card.pending  { border-color: rgba(79,70,229,0.18); }
+.ride-card.accepted { border-color: rgba(16,185,129,0.2); opacity: 0.75; }
+.ride-card.rejected { border-color: rgba(239,68,68,0.15); opacity: 0.5; }
+.ride-card.cancelled{ border-color: #e5e7eb; opacity: 0.4; }
+
+@keyframes ride-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+/* Top coloré */
+.ride-card-top {
+  height: 4px;
+  background: var(--brand-200);
+}
+.ride-card.pending  .ride-card-top { background: linear-gradient(90deg, var(--brand-600), #7c3aed); }
+.ride-card.accepted .ride-card-top { background: var(--green); }
+.ride-card.rejected .ride-card-top { background: var(--red); }
+
+/* Corps */
+.ride-card-body { padding: 14px 16px; }
+
+.ride-card-row {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Avatar passager */
+.ride-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--brand-100);
+  color: var(--brand-600);
+  font-weight: 800;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ride-card-info { flex: 1; min-width: 0; }
+.ride-card-passenger {
+  font-weight: 700;
+  font-size: 0.93rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ride-card-meta {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ride-card-meta-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Badge statut */
+.ride-card-status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+.ride-card-status.pending  { background: var(--brand-100); color: var(--brand-700); }
+.ride-card-status.accepted { background: var(--green-50);  color: var(--green-dark); }
+.ride-card-status.rejected { background: var(--red-50);    color: var(--red-dark); }
+
+/* Ligne séparatrice avant les boutons */
+.ride-card-divider {
+  height: 1px;
+  background: var(--bg-secondary);
+  margin: 0 -16px 12px;
+}
+
+/* Boutons Accepter / Refuser */
+.ride-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
 .btn-accept {
-  flex: 1;
-  padding: 10px;
-  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 10px;
+  background: linear-gradient(135deg, #059669, var(--green));
   color: #fff;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   font-weight: 700;
   font-size: 0.88rem;
   cursor: pointer;
-  transition: opacity 0.2s;
+  box-shadow: 0 3px 10px rgba(16,185,129,0.3);
+  transition: transform 0.12s, box-shadow 0.12s;
 }
-.btn-accept:hover    { opacity: 0.9; }
-.btn-accept:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-accept:active { transform: scale(0.96); box-shadow: none; }
+.btn-accept:disabled { background: #d1d5db; box-shadow: none; cursor: not-allowed; }
 
 .btn-reject {
-  flex: 1;
-  padding: 10px;
-  background: var(--red-50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 10px;
+  background: var(--bg-secondary);
   color: var(--red);
-  border: 1.5px solid var(--red);
-  border-radius: 10px;
+  border: 1.5px solid rgba(239,68,68,0.3);
+  border-radius: 12px;
   font-weight: 700;
   font-size: 0.88rem;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: background 0.15s, transform 0.12s;
 }
-.btn-reject:hover    { opacity: 0.8; }
-.btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-reject:hover  { background: var(--red-50); }
+.btn-reject:active { transform: scale(0.96); }
+.btn-reject:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* État vide */
 .no-rides-msg {
   text-align: center;
-  color: var(--text-muted);
+  padding: 24px 16px;
+}
+.no-rides-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+.no-rides-text {
   font-size: 0.85rem;
-  padding: 16px 0;
+  color: var(--text-muted);
+  font-weight: 500;
 }
