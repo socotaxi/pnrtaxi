@@ -42,16 +42,34 @@ function initMap() {
 }
 
 // ── Géolocalisation passager (suivi continu) ─────────────────
-const userIcon = L.divIcon({
-  className: '',
-  html: `<div style="
-    width:18px;height:18px;border-radius:50%;
-    background:#4a90e2;border:3px solid white;
-    box-shadow:0 0 0 4px rgba(74,144,226,0.3);
-  "></div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-});
+function makeUserIcon(avatarUrl) {
+  if (avatarUrl) {
+    return L.divIcon({
+      className: '',
+      html: `<div style="
+        width:20px;height:20px;border-radius:50%;
+        border:2px solid white;
+        box-shadow:0 0 0 2px #4a90e2, 0 2px 6px rgba(0,0,0,0.3);
+        overflow:hidden;background:#4a90e2;
+        flex-shrink:0;
+      "><img src="${avatarUrl}" alt="" style="
+        width:100%;height:100%;object-fit:cover;display:block;
+      " onerror="this.parentElement.style.background='#4a90e2';this.remove();" /></div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+  }
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:18px;height:18px;border-radius:50%;
+      background:#4a90e2;border:3px solid white;
+      box-shadow:0 0 0 4px rgba(74,144,226,0.3);
+    "></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+}
 
 function locateUser() {
   if (!navigator.geolocation) {
@@ -76,7 +94,7 @@ function locateUser() {
       if (userMarker) {
         userMarker.setLatLng([userLat, userLng]);
       } else {
-        userMarker = L.marker([userLat, userLng], { icon: userIcon })
+        userMarker = L.marker([userLat, userLng], { icon: makeUserIcon(session?.avatar_url) })
           .addTo(map)
           .bindPopup('<b>📍 Vous êtes ici</b>');
       }
@@ -758,6 +776,8 @@ function showProfile(session) {
       // Mettre à jour le bouton flottant sur la carte
       const floatEl = document.getElementById('float-avatar');
       if (floatEl) floatEl.innerHTML = `<img src="${url}" alt="${session.prenom}" />`;
+      // Mettre à jour le marqueur sur la carte
+      if (userMarker) userMarker.setIcon(makeUserIcon(url));
     } catch (err) {
       console.error('Erreur upload avatar:', err);
       setAvatarDisplay(session.avatar_url || null, initiale);
@@ -896,6 +916,8 @@ function startApp(s) {
             const floatEl = document.getElementById('float-avatar');
             if (floatEl) floatEl.innerHTML = `<img src="${data.avatar_url}" alt="${session.prenom}" />`;
             setAllAvatars(session);
+            // Mettre à jour le marqueur sur la carte
+            if (userMarker) userMarker.setIcon(makeUserIcon(data.avatar_url));
           }
         });
     }
