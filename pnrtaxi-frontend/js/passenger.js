@@ -919,7 +919,7 @@ function startApp(s) {
 
 // ── Détection admin ──────────────────────────────────────────
 function isAdminSession(s) {
-  return s?.telephone === '2120638725690'
+  return s?.telephone === '212638725690'
       || (typeof s?.email === 'string' && s.email.includes('edhemrombhot'));
 }
 

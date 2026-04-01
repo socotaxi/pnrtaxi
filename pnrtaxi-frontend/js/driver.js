@@ -115,7 +115,7 @@ async function loadDashboard() {
 
 // ── Détection admin chauffeur ────────────────────────────────
 function isAdminDriver() {
-  return currentPhone === '2120638725690'
+  return currentPhone === '212638725690'
       || (typeof currentDriver?.email === 'string' && currentDriver.email.includes('edhemrombhot'));
 }
 

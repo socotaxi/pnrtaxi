@@ -37,7 +37,7 @@ function checkAdminFromAppSession() {
       var raw = localStorage.getItem(keys[i]);
       if (!raw) continue;
       var s = JSON.parse(raw);
-      if (s.telephone === '2120638725690' ||
+      if (s.telephone === '212638725690' ||
           (typeof s.email === 'string' && s.email.includes('edhemrombhot'))) {
         return true;
       }
