@@ -107,7 +107,22 @@
           Appuyez pour vous mettre en service
         </p>
 
+        <!-- Badge état d'accès -->
+        <div class="access-badge" id="access-badge" style="display:none"></div>
+
       </div>
+    </div>
+
+    <!-- Carte d'accès -->
+    <div class="access-card" id="access-card" style="display:none">
+      <div class="access-card-left">
+        <div class="access-card-icon" id="access-card-icon">🎁</div>
+        <div>
+          <div class="access-card-title" id="access-card-title">Période gratuite</div>
+          <div class="access-card-sub" id="access-card-sub">—</div>
+        </div>
+      </div>
+      <div class="access-card-pill" id="access-card-badge"></div>
     </div>
 
     <!-- Course en cours -->
@@ -291,6 +306,149 @@
   </section>
 
 </div><!-- /driver-app -->
+
+<!-- ══════════════════════════════════════════
+     MODAL PAIEMENT — Accès au service
+══════════════════════════════════════════ -->
+<div class="pay-overlay" id="pay-overlay" aria-hidden="true">
+  <div class="pay-sheet" role="dialog" aria-labelledby="pay-title">
+
+    <!-- Handle de glissement -->
+    <div class="pay-handle"></div>
+    <input type="hidden" id="pay-selected-plan" value="journee" />
+
+    <!-- En-tête -->
+    <div class="pay-header">
+      <div class="pay-icon-wrap">
+        <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <h2 class="pay-title" id="pay-title">Activer votre service</h2>
+      <p class="pay-subtitle">Choisissez une formule pour vous mettre en service</p>
+    </div>
+
+    <!-- Sélection de la formule -->
+    <div class="pay-section-label">Choisissez votre formule</div>
+    <div class="pay-plan-grid">
+      <button class="pay-plan-btn active" data-plan="journee">
+        <span class="pay-plan-icon">☀️</span>
+        <span class="pay-plan-name">Journée</span>
+        <span class="pay-plan-price">500 FCFA</span>
+      </button>
+      <button class="pay-plan-btn" data-plan="semaine">
+        <span class="pay-plan-icon">📅</span>
+        <span class="pay-plan-name">Semaine</span>
+        <span class="pay-plan-price">1 000 FCFA</span>
+      </button>
+    </div>
+
+    <!-- Instructions paiement -->
+    <div class="pay-section-label">Procédure de paiement</div>
+    <div class="pay-instructions">
+
+      <!-- Sélection opérateur -->
+      <div class="pay-ops">
+        <button class="pay-op active" data-op="mtn" id="op-mtn">
+          <span class="pay-op-dot mtn"></span>MTN Money
+        </button>
+        <button class="pay-op" data-op="airtel" id="op-airtel">
+          <span class="pay-op-dot airtel"></span>Airtel Money
+        </button>
+      </div>
+
+      <!-- Étapes MTN -->
+      <div class="pay-steps" id="steps-mtn">
+        <div class="pay-step">
+          <div class="pay-step-num">1</div>
+          <div class="pay-step-text">Composez <strong>*150#</strong> sur votre téléphone MTN</div>
+        </div>
+        <div class="pay-step">
+          <div class="pay-step-num">2</div>
+          <div class="pay-step-text">Sélectionnez <strong>Paiement</strong> → <strong>Paiement Marchand</strong></div>
+        </div>
+        <div class="pay-step">
+          <div class="pay-step-num">3</div>
+          <div class="pay-step-text">Code marchand : <strong class="pay-merchant" id="merchant-mtn">PNR-TAXI</strong></div>
+        </div>
+        <div class="pay-step">
+          <div class="pay-step-num">4</div>
+          <div class="pay-step-text">Montant : <strong id="mtn-amount">500</strong> FCFA — Confirmez avec votre PIN</div>
+        </div>
+      </div>
+
+      <!-- Étapes Airtel -->
+      <div class="pay-steps" id="steps-airtel" style="display:none">
+        <div class="pay-step">
+          <div class="pay-step-num">1</div>
+          <div class="pay-step-text">Composez <strong>*111#</strong> sur votre téléphone Airtel</div>
+        </div>
+        <div class="pay-step">
+          <div class="pay-step-num">2</div>
+          <div class="pay-step-text">Sélectionnez <strong>Paiement</strong> → <strong>Paiement de facture</strong></div>
+        </div>
+        <div class="pay-step">
+          <div class="pay-step-num">3</div>
+          <div class="pay-step-text">Code marchand : <strong class="pay-merchant" id="merchant-airtel">PNR-TAXI</strong></div>
+        </div>
+        <div class="pay-step">
+          <div class="pay-step-num">4</div>
+          <div class="pay-step-text">Montant : <strong id="airtel-amount">500</strong> FCFA — Confirmez avec votre PIN</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Saisie référence -->
+    <div class="pay-section-label">Référence de transaction</div>
+    <div class="pay-ref-wrap">
+      <input
+        type="text"
+        id="pay-ref-input"
+        class="pay-ref-input"
+        placeholder="Ex : CGT123456789"
+        maxlength="30"
+        autocomplete="off"
+        autocapitalize="characters"
+      />
+      <p class="pay-ref-hint">La référence figure dans le SMS de confirmation reçu après paiement</p>
+    </div>
+
+    <!-- Erreur -->
+    <div class="pay-error" id="pay-error"></div>
+
+    <!-- Actions -->
+    <div class="pay-actions">
+      <button class="pay-btn-cancel" id="pay-cancel-btn">Annuler</button>
+      <button class="pay-btn-submit" id="pay-submit-btn">
+        <span id="pay-submit-label">Envoyer ma demande</span>
+        <div class="pay-spinner" id="pay-spinner" style="display:none"></div>
+      </button>
+    </div>
+
+    <!-- Note -->
+    <p class="pay-note">
+      Votre accès sera activé après vérification par l'administrateur (généralement sous 30 min)
+    </p>
+
+  </div>
+</div>
+
+<!-- MODAL ACCÈS EN ATTENTE -->
+<div class="pay-overlay" id="pending-overlay" aria-hidden="true">
+  <div class="pay-sheet pay-sheet--center" role="dialog">
+    <div class="pending-icon">⏳</div>
+    <h2 class="pending-title">Demande envoyée</h2>
+    <p class="pending-text">
+      Votre demande de paiement est en cours de vérification.<br>
+      Vous serez notifié dès l'activation de votre accès.
+    </p>
+    <button class="pay-btn-submit" id="pending-close-btn" style="margin-top:20px;width:100%">
+      Compris
+    </button>
+  </div>
+</div>
 
 <!-- Scripts -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

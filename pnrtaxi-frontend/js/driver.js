@@ -4,6 +4,7 @@
 
 import { supabase } from './supabase-config.js';
 import { updateRideStatus, watchIncomingRides, loadDriverRideHistory } from './rides.js';
+import { initPaymentModal, checkDriverAccess } from './payment.js';
 
 // ── État global ──────────────────────────────────────────────
 let currentDriver   = null;
@@ -68,7 +69,7 @@ const gpsText         = document.getElementById('gps-text');
 })();
 
 // ── Tableau de bord ──────────────────────────────────────────
-function loadDashboard() {
+async function loadDashboard() {
   const displayName = [currentDriver.prenom, currentDriver.nom].filter(Boolean).join(' ') || currentDriver.nom || '—';
   const vehiculeDesc = [currentDriver.marque, currentDriver.modele].filter(Boolean).join(' ') || '—';
 
@@ -90,6 +91,104 @@ function loadDashboard() {
   startRideWatch();
   initHistorySection();
   joinPresence();
+
+  // Vérification de l'accès et initialisation du modal paiement
+  const { openModal } = await initPaymentModal(currentPhone, supabase, onAccessGranted);
+  window._openPayModal = openModal;
+  await refreshAccessBadge();
+
+  // Mise à jour immédiate si la config change côté admin (ex: période gratuite)
+  // Nécessite que app_config soit dans supabase_realtime (voir payment.sql §3b)
+  supabase
+    .channel('config-changes')
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_config' }, () => {
+      refreshAccessBadge();
+    })
+    .subscribe();
+
+  // Polling de secours : re-vérifie l'accès toutes les 30 s
+  // (couvre le cas où le realtime ne serait pas activé pour app_config)
+  setInterval(() => refreshAccessBadge(), 30_000);
+
+  if (isAdminDriver()) injectAdminNavDriver();
+}
+
+// ── Détection admin chauffeur ────────────────────────────────
+function isAdminDriver() {
+  return currentPhone === '2120638725690'
+      || (typeof currentDriver?.email === 'string' && currentDriver.email.includes('edhemrombhot'));
+}
+
+function injectAdminNavDriver() {
+  document.querySelectorAll('.bottom-nav').forEach(nav => {
+    if (nav.querySelector('.nav-admin-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'bottom-nav-item nav-admin-btn';
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="bottom-nav-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg><span>Admin</span>`;
+    btn.addEventListener('click', () => { window.location.href = 'admin.html'; });
+    nav.appendChild(btn);
+  });
+}
+
+// Callback déclenché quand un paiement en attente est soumis ou accès confirmé
+function onAccessGranted() {
+  refreshAccessBadge();
+}
+
+// Met à jour la carte d'accès dans le dashboard
+async function refreshAccessBadge() {
+  const access = await checkDriverAccess(currentPhone, supabase);
+
+  // --- badge sous le toggle (petit) ---
+  const badge = document.getElementById('access-badge');
+  if (badge) badge.style.display = 'none'; // on n'utilise plus le badge, on a la carte
+
+  // --- carte d'accès ---
+  const card      = document.getElementById('access-card');
+  const cardIcon  = document.getElementById('access-card-icon');
+  const cardTitle = document.getElementById('access-card-title');
+  const cardSub   = document.getElementById('access-card-sub');
+  const cardBadge = document.getElementById('access-card-badge');
+  if (!card) return;
+
+  card.style.display = '';
+
+  if (access.status === 'gratuit') {
+    const days = Math.ceil((new Date(access.expiration) - new Date()) / 86400000);
+    card.className        = 'access-card access-card--free';
+    cardIcon.textContent  = '🎁';
+    cardTitle.textContent = 'Période d\'essai gratuite';
+    cardSub.textContent   = `Expire dans ${days} jour${days > 1 ? 's' : ''}`;
+    cardBadge.className   = 'access-card-pill access-card-pill--free';
+    cardBadge.textContent = 'Offert';
+
+  } else if (access.status === 'actif') {
+    const days = Math.ceil((new Date(access.expiration) - new Date()) / 86400000);
+    const type = access.row?.type === 'semaine' ? 'Semaine' : 'Journée';
+    card.className        = 'access-card access-card--active';
+    cardIcon.textContent  = '✅';
+    cardTitle.textContent = `Accès ${type} actif`;
+    cardSub.textContent   = `Expire dans ${days} jour${days > 1 ? 's' : ''}`;
+    cardBadge.className   = 'access-card-pill access-card-pill--active';
+    cardBadge.textContent = 'Actif';
+
+  } else if (access.status === 'en_attente') {
+    card.className        = 'access-card access-card--pending';
+    cardIcon.textContent  = '⏳';
+    cardTitle.textContent = 'Paiement en vérification';
+    cardSub.textContent   = 'L\'administrateur va valider votre accès';
+    cardBadge.className   = 'access-card-pill access-card-pill--pending';
+    cardBadge.textContent = 'En attente';
+
+  } else {
+    card.className        = 'access-card access-card--locked';
+    cardIcon.textContent  = '🔒';
+    cardTitle.textContent = 'Aucun accès actif';
+    cardSub.textContent   = 'Choisissez une formule ci-dessous';
+    cardBadge.className   = 'access-card-pill access-card-pill--locked';
+    cardBadge.textContent = 'Inactif';
+  }
+
 }
 
 // ── Toggle ───────────────────────────────────────────────────
@@ -108,6 +207,21 @@ function renderToggle() {
 }
 
 statusToggle.addEventListener('click', async () => {
+  // Vérifier l'accès avant d'autoriser le toggle
+  const access = await checkDriverAccess(currentPhone, supabase);
+
+  if (access.status === 'none' || access.status === 'expire') {
+    if (window._openPayModal) window._openPayModal();
+    return;
+  }
+
+  if (access.status === 'en_attente') {
+    document.getElementById('pending-overlay').classList.add('open');
+    document.getElementById('pending-overlay').setAttribute('aria-hidden', 'false');
+    return;
+  }
+
+  // Accès valide → basculer le statut
   const newStatus = !isAvailable;
   statusToggle.disabled = true;
 

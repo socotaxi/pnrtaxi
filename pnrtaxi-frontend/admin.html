@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PNR Taxi — Admin</title>
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" />
+
+  <style>
+    /* ── Reset & Variables ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand-50:  #eef2ff;
+      --brand-100: #e0e7ff;
+      --brand-200: #c7d2fe;
+      --brand-500: #6366f1;
+      --brand-600: #4f46e5;
+      --brand-700: #4338ca;
+      --green:     #10b981;
+      --green-50:  #ecfdf5;
+      --red:       #ef4444;
+      --red-50:    #fef2f2;
+      --amber:     #f59e0b;
+      --amber-50:  #fffbeb;
+      --bg:        #f1f5f9;
+      --card:      #ffffff;
+      --border:    #e2e8f0;
+      --text:      #0f172a;
+      --muted:     #64748b;
+      --radius:    14px;
+      --shadow:    0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04);
+    }
+
+    html, body {
+      min-height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+    input  { font-family: inherit; outline: none; }
+
+    /* ══════════════════════════════════════════
+       ÉCRAN DE CONNEXION
+    ══════════════════════════════════════════ */
+    #login-screen {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .login-card {
+      background: var(--card);
+      border-radius: 24px;
+      box-shadow: 0 8px 40px rgba(79,70,229,0.12), 0 2px 8px rgba(0,0,0,0.06);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .login-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .login-logo-icon {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-500));
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+      box-shadow: 0 4px 12px rgba(79,70,229,0.35);
+    }
+
+    .login-logo-text h1 { font-size: 1.25rem; font-weight: 800; color: var(--brand-700); }
+    .login-logo-text p  { font-size: 0.72rem; color: var(--muted); font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; }
+
+    .login-headline { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+    .login-sub      { font-size: 0.875rem; color: var(--muted); margin-bottom: 28px; }
+
+    .login-field label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .login-field input {
+      width: 100%;
+      padding: 13px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.95rem;
+      background: #f8fafc;
+      transition: border-color 0.2s;
+    }
+
+    .login-field input:focus { border-color: var(--brand-500); background: white; }
+
+    .login-error {
+      font-size: 0.82rem;
+      color: var(--red);
+      margin-top: 10px;
+      min-height: 20px;
+    }
+
+    .login-btn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-500));
+      color: white;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(79,70,229,0.35);
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .login-btn:hover   { opacity: 0.92; }
+    .login-btn:active  { transform: scale(0.98); }
+
+    /* ══════════════════════════════════════════
+       DASHBOARD PRINCIPAL
+    ══════════════════════════════════════════ */
+    #admin-screen { display: none; }
+
+    .admin-topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: white;
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .topbar-brand {
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .topbar-logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-500));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .topbar-title { font-size: 1rem; font-weight: 700; color: var(--brand-700); }
+    .topbar-sub   { font-size: 0.7rem; color: var(--muted); font-weight: 500; }
+
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+    .topbar-live {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.78rem; font-weight: 600; color: var(--green);
+      background: var(--green-50);
+      border: 1px solid rgba(16,185,129,0.25);
+      border-radius: 20px;
+      padding: 5px 10px;
+    }
+
+    .topbar-live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .topbar-logout {
+      padding: 7px 14px;
+      background: var(--red-50);
+      color: var(--red);
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 10px;
+      border: 1px solid rgba(239,68,68,0.2);
+      transition: background 0.2s;
+    }
+
+    .topbar-logout:hover { background: #fee2e2; }
+
+    /* ── Contenu principal ── */
+    .admin-body {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .section-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── KPI Cards ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    @media (min-width: 640px) {
+      .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .kpi-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .kpi-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+    }
+
+    .kpi-icon--blue   { background: var(--brand-50); }
+    .kpi-icon--green  { background: var(--green-50); }
+    .kpi-icon--amber  { background: var(--amber-50); }
+    .kpi-icon--purple { background: #faf5ff; }
+
+    .kpi-value {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .kpi-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .kpi-sub {
+      font-size: 0.72rem;
+      color: var(--green);
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    /* ── Config Panel ── */
+    .config-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 28px;
+    }
+
+    .config-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .config-header-title { font-size: 0.95rem; font-weight: 700; }
+    .config-header-sub   { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+    .config-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+    .config-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .config-row-label  { font-size: 0.88rem; font-weight: 600; }
+    .config-row-sub    { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+
+    /* Toggle switch */
+    .toggle-switch {
+      position: relative;
+      width: 52px; height: 28px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: #cbd5e1;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.25s;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 22px; height: 22px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      transition: transform 0.25s;
+    }
+
+    .toggle-switch input:checked + .toggle-track { background: var(--brand-600); }
+    .toggle-switch input:checked + .toggle-track::after { transform: translateX(24px); }
+
+    .config-input {
+      width: 90px;
+      padding: 8px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-align: center;
+      background: #f8fafc;
+      transition: border-color 0.2s;
+    }
+
+    .config-input:focus { border-color: var(--brand-500); background: white; }
+
+    .config-input-suffix {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-left: 6px;
+    }
+
+    .config-save-btn {
+      padding: 10px 20px;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-500));
+      color: white;
+      font-size: 0.85rem;
+      font-weight: 700;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+      transition: opacity 0.2s, transform 0.15s;
+      width: 100%;
+    }
+
+    .config-save-btn:hover  { opacity: 0.9; }
+    .config-save-btn:active { transform: scale(0.98); }
+
+    .config-feedback {
+      font-size: 0.82rem;
+      color: var(--green);
+      font-weight: 600;
+      text-align: center;
+      min-height: 20px;
+    }
+
+    /* ── Tableau paiements en attente ── */
+    .table-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 28px;
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-header-title { font-size: 0.95rem; font-weight: 700; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px; height: 22px;
+      border-radius: 11px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0 6px;
+    }
+
+    .badge--red    { background: var(--red-50);   color: var(--red);   border: 1px solid rgba(239,68,68,0.25); }
+    .badge--green  { background: var(--green-50);  color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
+    .badge--amber  { background: var(--amber-50);  color: #92400e;      border: 1px solid rgba(245,158,11,0.25); }
+    .badge--blue   { background: var(--brand-50);  color: var(--brand-600); border: 1px solid var(--brand-200); }
+
+    .table-empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .table-empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+    /* Table */
+    .data-table { width: 100%; border-collapse: collapse; }
+
+    .data-table th {
+      padding: 10px 16px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+
+    .data-table td {
+      padding: 14px 16px;
+      font-size: 0.855rem;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #f8fafc; }
+
+    .driver-cell { display: flex; align-items: center; gap: 10px; }
+
+    .driver-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--brand-600);
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .driver-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .driver-name { font-weight: 600; font-size: 0.875rem; }
+    .driver-phone { font-size: 0.76rem; color: var(--muted); }
+
+    .ref-code {
+      font-family: 'Courier New', monospace;
+      font-size: 0.82rem;
+      background: #f1f5f9;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .op-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .op-badge--mtn    { background: #fef9c3; color: #713f12; }
+    .op-badge--airtel { background: #fee2e2; color: #7f1d1d; }
+
+    .action-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      transition: transform 0.15s, background 0.15s;
+    }
+
+    .action-btn:active { transform: scale(0.92); }
+    .action-btn--validate { background: var(--green-50); color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
+    .action-btn--validate:hover { background: #bbf7d0; }
+    .action-btn--reject   { background: var(--red-50);   color: var(--red);   border: 1px solid rgba(239,68,68,0.25); }
+    .action-btn--reject:hover { background: #fecaca; }
+    .action-btn--grant    { background: var(--brand-50); color: var(--brand-600); border: 1px solid var(--brand-200); }
+    .action-btn--grant:hover { background: var(--brand-100); }
+    .action-btn--disable  { background: #f1f5f9; color: #64748b; border: 1px solid var(--border); }
+    .action-btn--disable:hover { background: #e2e8f0; }
+
+    .actions-group { display: flex; align-items: center; gap: 6px; }
+
+    /* Tooltip */
+    .action-btn { position: relative; }
+    .action-btn[title]:hover::after {
+      content: attr(title);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: white;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      padding: 4px 8px;
+      border-radius: 6px;
+      pointer-events: none;
+    }
+
+    /* ── Modal Offrir accès ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      backdrop-filter: blur(4px);
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-box {
+      background: white;
+      border-radius: 20px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; }
+    .modal-sub   { font-size: 0.85rem; color: var(--muted); margin-bottom: 20px; }
+    .modal-label { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: block; }
+
+    .modal-select, .modal-input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.9rem;
+      background: #f8fafc;
+      margin-bottom: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .modal-select:focus, .modal-input:focus { border-color: var(--brand-500); background: white; }
+
+    .modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+    .modal-cancel  { flex: 1; padding: 12px; background: #f1f5f9; color: var(--muted); font-size: 0.88rem; font-weight: 600; border-radius: 10px; }
+    .modal-confirm { flex: 2; padding: 12px; background: linear-gradient(135deg, var(--brand-600), var(--brand-500)); color: white; font-size: 0.88rem; font-weight: 700; border-radius: 10px; box-shadow: 0 4px 12px rgba(79,70,229,0.3); }
+
+    /* Snackbar */
+    .snackbar {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e293b;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+      z-index: 999;
+      transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      white-space: nowrap;
+    }
+
+    .snackbar.show { transform: translateX(-50%) translateY(0); }
+
+    /* Loader inline */
+    .table-loading {
+      padding: 40px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .spinner-sm {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--brand-600);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Responsive table scroll */
+    .table-scroll { overflow-x: auto; }
+
+    /* ── Mobile : tableaux en cartes ── */
+    @media (max-width: 599px) {
+      .data-table thead { display: none; }
+
+      .data-table,
+      .data-table tbody,
+      .data-table tr,
+      .data-table td { display: block; width: 100%; }
+
+      .data-table tr {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .data-table tr:last-child { border-bottom: none; }
+      .data-table tr:hover td { background: transparent; }
+
+      .data-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 5px 0;
+        border-bottom: none;
+        font-size: 0.85rem;
+      }
+
+      .data-table td::before {
+        content: attr(data-label);
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--muted);
+        flex-shrink: 0;
+        min-width: 80px;
+      }
+
+      /* 1ère cellule = identité chauffeur, prend toute la largeur */
+      .data-table td:first-child {
+        padding-bottom: 10px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid #f1f5f9;
+        justify-content: flex-start;
+      }
+      .data-table td:first-child::before { display: none; }
+
+      /* Dernière cellule = actions, alignée à droite */
+      .data-table td:last-child { justify-content: flex-end; }
+      .data-table td:last-child::before { display: none; }
+
+      /* topbar sur mobile */
+      .topbar-live { display: none; }
+      .admin-topbar { padding: 0 14px; }
+      .topbar-title { font-size: 0.88rem; }
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: #f1f5f9;
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 20px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 9px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .tab.active { background: white; color: var(--brand-700); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+    /* ── Pagination ── */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .page-btn {
+      padding: 7px 16px;
+      background: var(--brand-50);
+      color: var(--brand-600);
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--brand-200);
+      transition: background 0.2s;
+    }
+
+    .page-btn:hover:not(:disabled) { background: var(--brand-100); }
+    .page-btn:disabled { opacity: 0.38; cursor: default; }
+
+    .page-info {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 500;
+      min-width: 80px;
+      text-align: center;
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     ÉCRAN DE CONNEXION ADMIN
+══════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+
+    <div class="login-logo">
+      <div class="login-logo-icon">🚖</div>
+      <div class="login-logo-text">
+        <h1>PNR TAXI</h1>
+        <p>Administration</p>
+      </div>
+    </div>
+
+    <h2 class="login-headline">Accès administrateur</h2>
+    <p class="login-sub">Entrez le mot de passe pour accéder au tableau de bord</p>
+
+    <div class="login-field">
+      <label for="admin-password">Mot de passe</label>
+      <input
+        type="password"
+        id="admin-password"
+        placeholder="••••••••"
+        autocomplete="current-password"
+      />
+    </div>
+
+    <div class="login-error" id="login-error"></div>
+
+    <button class="login-btn" id="login-btn">Se connecter</button>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     DASHBOARD ADMIN
+══════════════════════════════════════════ -->
+<div id="admin-screen" style="display:none;min-height:100vh;background:#f1f5f9">
+
+  <!-- Top Bar -->
+  <div class="admin-topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">🚖</div>
+      <div>
+        <div class="topbar-title">PNR TAXI Admin</div>
+        <div class="topbar-sub">Tableau de bord</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-live">
+        <div class="topbar-live-dot"></div>
+        Temps réel
+      </div>
+      <button class="topbar-logout" id="admin-back-btn" style="background:var(--brand-50);color:var(--brand-700);border:1.5px solid var(--brand-200)">← Retour</button>
+      <button class="topbar-logout" id="admin-logout-btn">Déconnexion</button>
+    </div>
+  </div>
+
+  <!-- Corps -->
+  <div class="admin-body">
+
+    <!-- ── KPI Cards ── -->
+    <div class="section-title">Vue d'ensemble</div>
+    <div class="kpi-grid">
+
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--blue">🚖</div>
+        <div class="kpi-value" id="kpi-drivers">—</div>
+        <div class="kpi-label">Chauffeurs inscrits</div>
+        <div class="kpi-sub" id="kpi-drivers-sub"></div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--green">🟢</div>
+        <div class="kpi-value" id="kpi-online">—</div>
+        <div class="kpi-label">En service maintenant</div>
+        <div class="kpi-sub" id="kpi-online-sub"></div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--amber">⏳</div>
+        <div class="kpi-value" id="kpi-pending">—</div>
+        <div class="kpi-label">Paiements en attente</div>
+        <div class="kpi-sub" id="kpi-pending-sub"></div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon kpi-icon--purple">💰</div>
+        <div class="kpi-value" id="kpi-revenue">—</div>
+        <div class="kpi-label">Revenus ce mois (FCFA)</div>
+        <div class="kpi-sub" id="kpi-revenue-sub"></div>
+      </div>
+
+    </div>
+
+    <!-- ── Configuration ── -->
+    <div class="section-title">Configuration du service</div>
+    <div class="config-card">
+      <div class="config-header">
+        <div>
+          <div class="config-header-title">Paramètres globaux</div>
+          <div class="config-header-sub">Modifiable en temps réel — s'applique immédiatement à tous les chauffeurs</div>
+        </div>
+      </div>
+      <div class="config-body">
+
+        <div class="config-row">
+          <div>
+            <div class="config-row-label">Période d'essai gratuite</div>
+            <div class="config-row-sub">Les nouveaux chauffeurs bénéficient d'un accès gratuit</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="cfg-gratuite" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+        <div class="config-row">
+          <div>
+            <div class="config-row-label">Durée de la période gratuite</div>
+            <div class="config-row-sub">En mois, pour chaque nouveau chauffeur</div>
+          </div>
+          <div style="display:flex;align-items:center">
+            <input type="number" id="cfg-duree" class="config-input" min="1" max="12" value="1" />
+            <span class="config-input-suffix">mois</span>
+          </div>
+        </div>
+
+        <div class="config-row">
+          <div>
+            <div class="config-row-label">Tarif journée</div>
+            <div class="config-row-sub">Accès valable jusqu'à minuit du jour J</div>
+          </div>
+          <div style="display:flex;align-items:center">
+            <input type="number" id="cfg-journee" class="config-input" min="0" value="500" />
+            <span class="config-input-suffix">FCFA</span>
+          </div>
+        </div>
+
+        <div class="config-row">
+          <div>
+            <div class="config-row-label">Tarif semaine</div>
+            <div class="config-row-sub">Accès valable 7 jours consécutifs</div>
+          </div>
+          <div style="display:flex;align-items:center">
+            <input type="number" id="cfg-semaine" class="config-input" min="0" value="1000" />
+            <span class="config-input-suffix">FCFA</span>
+          </div>
+        </div>
+
+        <button class="config-save-btn" id="config-save-btn">Enregistrer la configuration</button>
+        <div class="config-feedback" id="config-feedback"></div>
+
+      </div>
+    </div>
+
+    <!-- ── Paiements en attente ── -->
+    <div class="section-title">Paiements en attente de validation</div>
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-header-title">Demandes de paiement</div>
+        <span class="badge badge--amber" id="pending-count-badge">0</span>
+      </div>
+      <div id="pending-table-wrap">
+        <div class="table-loading"><div class="spinner-sm"></div></div>
+      </div>
+    </div>
+
+    <!-- ── Tous les chauffeurs ── -->
+    <div class="section-title">Chauffeurs</div>
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-header-title">Liste des chauffeurs</div>
+        <span class="badge badge--blue" id="drivers-count-badge">0</span>
+      </div>
+
+      <!-- Tabs filtre -->
+      <div style="padding:16px 20px 0">
+        <div class="tabs">
+          <button class="tab active" data-filter="all">Tous</button>
+          <button class="tab" data-filter="actif">Actifs</button>
+          <button class="tab" data-filter="gratuit">Gratuit</button>
+          <button class="tab" data-filter="expire">Expirés</button>
+        </div>
+      </div>
+
+      <div id="drivers-table-wrap">
+        <div class="table-loading"><div class="spinner-sm"></div></div>
+      </div>
+    </div>
+
+  </div><!-- /admin-body -->
+</div><!-- /admin-screen -->
+
+<!-- ══════════════════════════════════════════
+     MODAL — Offrir accès manuel
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="grant-modal">
+  <div class="modal-box">
+    <div class="modal-title">Offrir un accès</div>
+    <p class="modal-sub" id="grant-modal-driver-name">Chauffeur</p>
+
+    <label class="modal-label">Formule</label>
+    <select class="modal-select" id="grant-type">
+      <option value="journee">Journée — 1 jour</option>
+      <option value="semaine">Semaine — 7 jours</option>
+      <option value="gratuit">Gratuit — durée personnalisée</option>
+    </select>
+
+    <div id="grant-custom-days-wrap" style="display:none">
+      <label class="modal-label">Nombre de jours</label>
+      <input type="number" class="modal-input" id="grant-days" min="1" max="365" value="7" placeholder="Nombre de jours" />
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-cancel" id="grant-cancel-btn">Annuler</button>
+      <button class="modal-confirm" id="grant-confirm-btn">Activer l'accès</button>
+    </div>
+  </div>
+</div>
+
+<!-- Snackbar notification -->
+<div class="snackbar" id="snackbar"></div>
+
+<!-- Supabase via CDN (script classique, pas de module) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

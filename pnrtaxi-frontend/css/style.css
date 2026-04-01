@@ -724,7 +724,10 @@ html, body {
 #dashboard-screen {
   display: none;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 72px; /* espace pour la bottom nav fixe */
 }
 
 #dashboard-screen.active {
@@ -2636,7 +2639,7 @@ html, body {
   transition: max-height 0.35s ease;
 }
 .history-body.open {
-  max-height: 1000px;
+  max-height: 4000px;
 }
 
 .history-pagination {
@@ -2685,4 +2688,568 @@ html, body {
   font-size: 0.85rem;
   color: var(--text-muted);
   font-weight: 500;
+}
+
+/* ══════════════════════════════════════════
+   SYSTÈME DE PAIEMENT — Modal & Badge
+   ══════════════════════════════════════════ */
+
+/* ── Overlay plein écran ── */
+.pay-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.pay-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ── Sheet (bottom sheet) ── */
+.pay-sheet {
+  background: var(--bg-primary);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 520px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 20px 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(30px);
+  transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.18);
+}
+
+.pay-overlay.open .pay-sheet {
+  transform: translateY(0);
+}
+
+/* Variante centrée (modale "en attente") */
+.pay-sheet--center {
+  border-radius: 24px;
+  max-width: 380px;
+  max-height: unset;
+  padding: 36px 28px;
+  text-align: center;
+}
+
+/* ── Sélecteur de formule dans la modal ── */
+.pay-plan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.pay-plan-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  border-radius: 14px;
+  border: 2px solid var(--border);
+  background: var(--bg-soft);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.pay-plan-btn.active {
+  border-color: var(--brand-600);
+  background: var(--brand-50);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+
+.pay-plan-btn:active { transform: scale(0.97); }
+
+.pay-plan-icon { font-size: 1.4rem; }
+
+.pay-plan-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pay-plan-price {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--brand-600);
+}
+
+/* ── Handle ── */
+.pay-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+
+/* ── En-tête ── */
+.pay-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.pay-icon-wrap {
+  width: 60px;
+  height: 60px;
+  background: var(--brand-50);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  color: var(--brand-600);
+}
+
+.pay-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.pay-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* ── Label de section ── */
+.pay-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-muted);
+  margin: 20px 0 10px;
+}
+
+/* ── Sélecteur de plan dans le dashboard ── */
+.plan-picker {
+  margin: 0 16px 14px;
+}
+
+.plan-picker-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.plan-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.plan-picker-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 8px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+
+.plan-picker-btn:active { transform: scale(0.97); }
+
+.plan-picker-btn.active {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+.plan-picker-icon  { font-size: 1.4rem; line-height: 1; }
+.plan-picker-name  { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); }
+.plan-picker-price {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand-600);
+  background: var(--brand-100);
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+.plan-picker-btn.active .plan-picker-price { background: var(--brand-200); }
+
+/* ── Sélection formule — boutons toggle (modal) ── */
+.pay-toggle-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pay-toggle-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+
+.pay-toggle-btn:active { transform: scale(0.97); }
+
+.pay-toggle-btn.active {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+.pay-toggle-icon  { font-size: 1.5rem; line-height: 1; }
+.pay-toggle-name  { font-size: 0.88rem; font-weight: 700; color: var(--text-primary); }
+.pay-toggle-price {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brand-600);
+  background: var(--brand-100);
+  border-radius: 20px;
+  padding: 2px 8px;
+  margin-top: 2px;
+}
+
+.pay-toggle-btn.active .pay-toggle-price {
+  background: var(--brand-200);
+}
+
+/* ── Instructions paiement ── */
+.pay-instructions {
+  background: var(--bg-secondary);
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+}
+
+/* Sélection opérateur */
+.pay-ops {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.pay-op {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: white;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.pay-op.active {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+
+.pay-op-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pay-op-dot.mtn    { background: #eab308; }
+.pay-op-dot.airtel { background: #ef4444; }
+
+/* Étapes USSD */
+.pay-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pay-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pay-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--brand-600);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.pay-step-text {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.pay-step-text strong { color: var(--brand-700); }
+
+.pay-merchant {
+  font-family: 'Courier New', monospace;
+  background: var(--brand-100);
+  color: var(--brand-700);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.85rem;
+}
+
+/* ── Saisie référence ── */
+.pay-ref-wrap { margin-top: 4px; }
+
+.pay-ref-input {
+  width: 100%;
+  padding: 13px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.pay-ref-input:focus {
+  border-color: var(--brand-500);
+  background: white;
+}
+
+.pay-ref-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.pay-ref-hint {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* ── Erreur ── */
+.pay-error {
+  font-size: 0.82rem;
+  color: var(--red);
+  font-weight: 500;
+  margin-top: 10px;
+  min-height: 18px;
+}
+
+/* ── Actions ── */
+.pay-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-primary);
+  padding: 12px 0 20px;
+  z-index: 10;
+}
+
+.pay-btn-cancel {
+  flex: 1;
+  padding: 13px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background 0.2s;
+}
+
+.pay-btn-cancel:hover { background: var(--border); }
+
+.pay-btn-submit {
+  flex: 2;
+  padding: 13px;
+  background: linear-gradient(135deg, var(--brand-700), var(--brand-500));
+  color: white;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+  transition: opacity 0.2s, transform 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pay-btn-submit:hover   { opacity: 0.9; }
+.pay-btn-submit:active  { transform: scale(0.98); }
+.pay-btn-submit:disabled { opacity: 0.6; }
+
+/* Spinner dans le bouton */
+.pay-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Note bas de modal ── */
+.pay-note {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+  padding-bottom: 8px;
+}
+
+/* ── Modale "En attente" ── */
+.pending-icon  { font-size: 3rem; margin-bottom: 12px; }
+.pending-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 8px; }
+.pending-text  { font-size: 0.875rem; color: var(--text-muted); line-height: 1.7; }
+
+/* ── Carte d'accès dans le dashboard driver ── */
+.access-card {
+  margin: 0 16px 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1.5px solid transparent;
+}
+
+.access-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.access-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.access-card-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.access-card-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.access-card-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Variantes */
+.access-card--free {
+  background: linear-gradient(135deg, #ede9fe, #dbeafe);
+  border-color: #c7d2fe;
+}
+.access-card--free .access-card-title { color: #4338ca; }
+.access-card-pill--free { background: #c7d2fe; color: #3730a3; }
+
+.access-card--active {
+  background: var(--green-50);
+  border-color: rgba(16,185,129,0.3);
+}
+.access-card--active .access-card-title { color: var(--green-dark); }
+.access-card-pill--active { background: #bbf7d0; color: #065f46; }
+
+.access-card--pending {
+  background: var(--amber-50);
+  border-color: rgba(245,158,11,0.3);
+}
+.access-card--pending .access-card-title { color: #92400e; }
+.access-card-pill--pending { background: #fde68a; color: #78350f; }
+
+.access-card--locked {
+  background: var(--red-50);
+  border-color: rgba(239,68,68,0.2);
+}
+.access-card--locked .access-card-title { color: var(--red-dark); }
+.access-card-pill--locked { background: #fecaca; color: #7f1d1d; }
+
+/* ── Badge d'accès sous le toggle ── */
+.access-badge {
+  margin: 10px 0 0;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.access-badge--free {
+  background: linear-gradient(135deg, #ede9fe, #dbeafe);
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+}
+
+.access-badge--paid {
+  background: var(--green-50);
+  color: var(--green-dark);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.access-badge--pending {
+  background: var(--amber-50);
+  color: var(--amber-600);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.access-badge--locked {
+  background: var(--red-50);
+  color: var(--red-dark);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
