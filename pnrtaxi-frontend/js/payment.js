@@ -220,6 +220,15 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
     const cfg    = await getAppConfig(supabase);
     tarifJournee = parseInt(cfg.tarif_journee, 10) || 500;
     tarifSemaine = parseInt(cfg.tarif_semaine, 10) || 1000;
+
+    // Mettre à jour les labels des boutons de formule
+    overlay.querySelectorAll('.pay-plan-btn').forEach(btn => {
+      const priceEl = btn.querySelector('.pay-plan-price');
+      if (!priceEl) return;
+      if (btn.dataset.plan === 'journee') priceEl.textContent = tarifJournee.toLocaleString('fr-FR') + ' FCFA';
+      if (btn.dataset.plan === 'semaine') priceEl.textContent = tarifSemaine.toLocaleString('fr-FR') + ' FCFA';
+    });
+
     updateAmountDisplay();
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
