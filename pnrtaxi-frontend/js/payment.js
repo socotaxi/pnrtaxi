@@ -131,6 +131,11 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
 
   if (!overlay) return;
 
+  // ── Chargement des tarifs depuis la config ────────────────────
+  const cfg         = await getAppConfig(supabase);
+  let tarifJournee  = parseInt(cfg.tarif_journee,  10) || 500;
+  let tarifSemaine  = parseInt(cfg.tarif_semaine,  10) || 1000;
+
   // ── Subscription Realtime — écoute les changements d'accès ─
   supabase
     .channel(`driver-access-${driverId}`)
@@ -171,7 +176,7 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
   }
 
   function updateAmountDisplay() {
-    const amount   = getSelectedPlan() === 'semaine' ? 1000 : 500;
+    const amount   = getSelectedPlan() === 'semaine' ? tarifSemaine : tarifJournee;
     const mtnEl    = document.getElementById('mtn-amount');
     const airtelEl = document.getElementById('airtel-amount');
     if (mtnEl)    mtnEl.textContent    = amount;
@@ -256,7 +261,7 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
         .insert({
           driver_id:       driverId,
           type:            plan,
-          montant:         plan === 'semaine' ? 1000 : 500,
+          montant:         plan === 'semaine' ? tarifSemaine : tarifJournee,
           date_debut:      new Date().toISOString(),
           // date_expiration provisoire — l'admin la confirme lors de la validation
           date_expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
