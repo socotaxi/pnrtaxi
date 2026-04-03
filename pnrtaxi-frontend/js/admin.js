@@ -203,7 +203,7 @@ function setupConfigSave() {
 
     var ok = true;
     for (var i = 0; i < updates.length; i++) {
-      var res = await sb.from('app_config').update({ valeur: updates[i].valeur }).eq('cle', updates[i].cle);
+      var res = await sb.from('app_config').upsert({ cle: updates[i].cle, valeur: updates[i].valeur });
       if (res.error) { ok = false; console.error('Config save error:', res.error); break; }
     }
 
