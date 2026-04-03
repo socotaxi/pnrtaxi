@@ -11,8 +11,10 @@
  * @returns {{ status: 'gratuit'|'actif'|'en_attente'|'expire'|'none', expiration: string|null }}
  */
 export async function checkDriverAccess(driverId, supabase) {
+  console.log('[PNR] checkDriverAccess — driverId:', driverId);
+
   // 1. Récupérer TOUS les accès actifs non expirés + config en parallèle
-  const [{ data: actifRows }, config] = await Promise.all([
+  const [accessResult, config] = await Promise.all([
     supabase
       .from('driver_access')
       .select('*')
@@ -22,6 +24,12 @@ export async function checkDriverAccess(driverId, supabase) {
       .order('date_expiration', { ascending: false }),
     getAppConfig(supabase),
   ]);
+
+  console.log('[PNR] config:', config);
+  console.log('[PNR] driver_access query error:', accessResult.error);
+  console.log('[PNR] actifRows:', accessResult.data);
+
+  const actifRows = accessResult.data;
 
   if (actifRows && actifRows.length > 0) {
     const gratuiteActive = config.gratuite_active === 'true';
@@ -53,8 +61,11 @@ export async function checkDriverAccess(driverId, supabase) {
   }
 
   // 3. Aucun accès → vérifier si la période gratuite peut être créée
+  console.log('[PNR] gratuite_active =', config.gratuite_active);
   if (config.gratuite_active === 'true') {
+    console.log('[PNR] Tentative création accès gratuit pour:', driverId);
     const created = await createFreeAccess(driverId, supabase, parseInt(config.gratuite_duree_mois, 10));
+    console.log('[PNR] createFreeAccess résultat:', created);
     if (created) {
       return { status: 'gratuit', expiration: created.date_expiration, row: created };
     }
@@ -67,8 +78,10 @@ export async function checkDriverAccess(driverId, supabase) {
     .eq('driver_id', driverId)
     .limit(1);
 
+  const finalStatus = expiredRows && expiredRows.length > 0 ? 'expire' : 'none';
+  console.log('[PNR] statut final:', finalStatus);
   return {
-    status:     expiredRows && expiredRows.length > 0 ? 'expire' : 'none',
+    status:     finalStatus,
     expiration: null,
     row:        null,
   };
