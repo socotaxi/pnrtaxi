@@ -21,13 +21,17 @@ ON CONFLICT (cle) DO NOTHING;
 ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Config lecture publique" ON public.app_config;
-DROP POLICY IF EXISTS "Config mise à jour" ON public.app_config;
+DROP POLICY IF EXISTS "Config mise à jour"      ON public.app_config;
+DROP POLICY IF EXISTS "Config insertion"        ON public.app_config;
 
 CREATE POLICY "Config lecture publique"
   ON public.app_config FOR SELECT USING (true);
 
 CREATE POLICY "Config mise à jour"
   ON public.app_config FOR UPDATE USING (true) WITH CHECK (true);
+
+CREATE POLICY "Config insertion"
+  ON public.app_config FOR INSERT WITH CHECK (true);
 
 
 -- ── 2. Table des accès drivers ───────────────────────────────
