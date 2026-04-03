@@ -131,10 +131,8 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
 
   if (!overlay) return;
 
-  // ── Chargement des tarifs depuis la config ────────────────────
-  const cfg         = await getAppConfig(supabase);
-  let tarifJournee  = parseInt(cfg.tarif_journee,  10) || 500;
-  let tarifSemaine  = parseInt(cfg.tarif_semaine,  10) || 1000;
+  let tarifJournee = 500;
+  let tarifSemaine = 1000;
 
   // ── Subscription Realtime — écoute les changements d'accès ─
   supabase
@@ -218,8 +216,11 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
     errorEl.textContent = '';
   }
 
-  function openModal() {
-    updateAmountDisplay(); // synchronise le montant avec le plan choisi dans le dashboard
+  async function openModal() {
+    const cfg    = await getAppConfig(supabase);
+    tarifJournee = parseInt(cfg.tarif_journee, 10) || 500;
+    tarifSemaine = parseInt(cfg.tarif_semaine, 10) || 1000;
+    updateAmountDisplay();
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
   }
