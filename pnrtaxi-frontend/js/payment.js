@@ -100,7 +100,7 @@ async function createFreeAccess(driverId, supabase, mois = 1) {
     .select()
     .single();
 
-  if (error) { console.warn('Erreur création accès gratuit:', error.message); return null; }
+  if (error) { console.error('Erreur création accès gratuit:', error.message, error); return null; }
   return data;
 }
 
