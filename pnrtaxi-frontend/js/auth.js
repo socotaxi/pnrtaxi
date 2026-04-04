@@ -5,19 +5,29 @@
 
 import { supabase } from './supabase-config.js';
 
-const SESSION_KEY = 'pnr_passenger';
-const OTP_DURATION = 5 * 60; // secondes
+const SESSION_KEY    = 'pnr_passenger';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+const OTP_DURATION   = 5 * 60; // secondes — délai UX avant de pouvoir renvoyer
 
 // ── Session ──────────────────────────────────────────────────
 export function getSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return parsed;
   } catch { return null; }
 }
 
 function saveSession(telephone, prenom, email = null, auth_provider = null, avatar_url = null, quartier = null, ville = null) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ telephone, prenom, email, auth_provider, avatar_url, quartier, ville }));
+  localStorage.setItem(SESSION_KEY, JSON.stringify({
+    telephone, prenom, email, auth_provider, avatar_url, quartier, ville,
+    expiresAt: Date.now() + SESSION_TTL_MS,
+  }));
 }
 
 export async function clearSession() {
@@ -38,6 +48,9 @@ async function handleOAuthCallback() {
   if (!session) return null;
 
   const user     = session.user;
+  // Session Phone Auth (OTP SMS) — ne pas traiter ici, géré dans initAuth
+  if (!user.email) return null;
+
   const email    = user.email;
   const meta     = user.user_metadata || {};
   const fullName = meta.full_name || meta.name || '';
@@ -69,30 +82,34 @@ async function checkExistingAccount(telephone) {
   return data;
 }
 
-// ── OTP (stocké en mémoire uniquement, aucune écriture DB) ───
-let _pendingOTP = { code: null, expiresAt: 0 };
-
-function generateOTP() {
-  return Math.floor(1000 + Math.random() * 9000).toString();
+// ── OTP via Supabase Phone Auth ───────────────────────────────
+async function sendOTP(phone) {
+  const { error } = await supabase.auth.signInWithOtp({ phone });
+  if (error) throw error;
 }
 
-function sendOTP() {
-  const code = generateOTP();
-  _pendingOTP = { code, expiresAt: Date.now() + OTP_DURATION * 1000 };
-  // Production : remplacer par appel SMS / WhatsApp API
-  return code;
+async function verifyOTP(phone, token) {
+  const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
+  if (error) throw error;
 }
 
-function verifyOTP(code) {
-  if (!_pendingOTP.code) return false;
-  if (_pendingOTP.code !== code) return false;
-  if (Date.now() > _pendingOTP.expiresAt) return false;
-  return true;
-}
+const AVATAR_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const AVATAR_MAX_SIZE_MB   = 5;
 
 async function uploadAvatar(telephone, file) {
   if (!file) return null;
-  const ext  = file.name.split('.').pop();
+
+  // Validation type MIME
+  if (!AVATAR_ALLOWED_TYPES.includes(file.type)) {
+    throw new Error('Format non supporté. Utilisez JPEG, PNG, WebP ou GIF.');
+  }
+  // Validation taille
+  if (file.size > AVATAR_MAX_SIZE_MB * 1024 * 1024) {
+    throw new Error(`Image trop lourde. Maximum ${AVATAR_MAX_SIZE_MB} Mo.`);
+  }
+
+  const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+  const ext  = extMap[file.type];
   const path = `passengers/${telephone}.${ext}`;
   const { error } = await supabase.storage
     .from('avatars')
@@ -115,7 +132,6 @@ async function saveProfile(telephone, prenom, nom, quartier, ville, avatarFile) 
     .upsert(record, { onConflict: 'telephone' });
 
   if (error) throw error;
-  _pendingOTP = { code: null, expiresAt: 0 };
   saveSession(telephone, prenom, null, null, avatarUrl, quartier, ville);
 }
 
@@ -192,7 +208,7 @@ function initOTPBoxes() {
 
     box.addEventListener('paste', (e) => {
       e.preventDefault();
-      const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+      const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
       [...pasted].forEach((ch, j) => { if (boxes[j]) boxes[j].value = ch; });
       const lastFilled = Math.min(pasted.length, boxes.length - 1);
       boxes[lastFilled].focus();
@@ -212,7 +228,7 @@ function clearOTPBoxes() {
 
 function checkVerifyReady() {
   const btn = document.getElementById('btn-verify-otp');
-  btn.disabled = getOTPValue().length < 4;
+  btn.disabled = getOTPValue().length < 6;
 }
 
 // ── Point d'entrée principal ──────────────────────────────────
@@ -238,69 +254,43 @@ export async function initAuth(onComplete) {
   // ── Boutons OAuth ────────────────────────────────────────────
   document.getElementById('btn-oauth-google').addEventListener('click', async () => {
     try { await loginWithOAuth('google'); }
-    catch (err) { console.error(err); showAuthError('phone-error', 'Erreur Google. Réessayez.'); }
+    catch { showAuthError('phone-error', 'Erreur Google. Réessayez.'); }
   });
 
   document.getElementById('btn-oauth-facebook').addEventListener('click', async () => {
     try { await loginWithOAuth('facebook'); }
-    catch (err) { console.error(err); showAuthError('phone-error', 'Erreur Facebook. Réessayez.'); }
+    catch { showAuthError('phone-error', 'Erreur Facebook. Réessayez.'); }
   });
 
   let currentPhone = '';
-  let currentOTP   = '';
 
   // ────────────────────────────────────────────────
   // ÉCRAN 1 — Numéro de téléphone
   // ────────────────────────────────────────────────
-  const btnSend = document.getElementById('btn-send-otp');
+  const btnSend    = document.getElementById('btn-send-otp');
   const phoneInput = document.getElementById('auth-phone-input');
   const prefixSelect = document.getElementById('phone-prefix-select');
 
-  // Forcer chiffres uniquement
   phoneInput.addEventListener('input', () => {
     phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 9);
     btnSend.disabled = phoneInput.value.length < 6;
   });
 
   btnSend.addEventListener('click', async () => {
-    const digits = phoneInput.value.trim();
+    const digits   = phoneInput.value.trim();
     if (digits.length < 6) return;
 
-    const dialCode = prefixSelect.value;
-    currentPhone = dialCode + digits;
-    setLoading(btnSend, true, 'Connexion…');
+    // Format E.164 requis par Supabase Phone Auth
+    currentPhone = '+' + prefixSelect.value + digits;
+    setLoading(btnSend, true, 'Envoi du code…');
 
     try {
-      // Vérifier si un compte vérifié existe déjà avec ce numéro
-      const existing = await checkExistingAccount(currentPhone);
+      await sendOTP(currentPhone);
 
-      if (existing) {
-        // Compte vérifié trouvé → connexion directe
-        saveSession(
-          existing.telephone,
-          existing.prenom,
-          existing.email,
-          existing.auth_provider,
-          existing.avatar_url,
-          existing.quartier,
-          existing.ville
-        );
-        document.getElementById('auth-overlay').classList.remove('visible');
-        onComplete({ telephone: existing.telephone, prenom: existing.prenom, nom: existing.nom, quartier: existing.quartier, ville: existing.ville });
-        return;
-      }
-
-      // Aucun compte vérifié → procédure OTP
-      setLoading(btnSend, true, 'Connexion / Recevoir le code');
-      currentOTP = sendOTP();
-
-      // Afficher le numéro masqué dans l'écran OTP
-      const masked = '+' + dialCode + ' ' + digits.slice(0, 2) + ' *** ** ' + digits.slice(-2);
-      document.getElementById('otp-subtitle').textContent = `Envoyé au ${masked}`;
-      document.getElementById('demo-code').textContent = currentOTP;
+      const masked = currentPhone.slice(0, 4) + ' *** ** ' + digits.slice(-2);
+      document.getElementById('otp-subtitle').textContent = `Code envoyé au ${masked}`;
 
       startTimer(() => {
-        // Code expiré — vider les boxes
         clearOTPBoxes();
         document.getElementById('btn-verify-otp').disabled = true;
       });
@@ -308,11 +298,10 @@ export async function initAuth(onComplete) {
       goTo('screen-otp');
       setTimeout(() => document.querySelector('.otp-box').focus(), 350);
 
-    } catch (err) {
-      console.error(err);
-      showAuthError('phone-error', 'Erreur réseau. Vérifiez votre connexion.');
+    } catch {
+      showAuthError('phone-error', 'Impossible d\'envoyer le code. Vérifiez le numéro.');
     } finally {
-      setLoading(btnSend, false, 'Connexion / Recevoir le code');
+      setLoading(btnSend, false, 'Recevoir le code');
     }
   });
 
@@ -329,13 +318,13 @@ export async function initAuth(onComplete) {
 
   btnVerify.addEventListener('click', async () => {
     const code = getOTPValue();
-    if (code.length < 4) return;
+    if (code.length < 6) return;
 
-    setLoading(btnVerify, true, 'Vérifier');
+    setLoading(btnVerify, true, 'Vérification…');
 
-    const ok = verifyOTP(code);
-
-    if (!ok) {
+    try {
+      await verifyOTP(currentPhone, code);
+    } catch {
       showAuthError('otp-error', 'Code incorrect ou expiré. Réessayez.');
       clearOTPBoxes();
       setLoading(btnVerify, false, 'Vérifier');
@@ -343,17 +332,33 @@ export async function initAuth(onComplete) {
     }
 
     clearInterval(timerInterval);
-    goTo('screen-name');
-    setTimeout(() => document.getElementById('nom-input').focus(), 350);
+
+    // OTP valide — vérifier si le compte existe déjà
+    const existing = await checkExistingAccount(currentPhone);
+    if (existing) {
+      saveSession(
+        existing.telephone, existing.prenom, existing.email,
+        existing.auth_provider, existing.avatar_url, existing.quartier, existing.ville
+      );
+      document.getElementById('auth-overlay').classList.remove('visible');
+      onComplete({ telephone: existing.telephone, prenom: existing.prenom, nom: existing.nom, quartier: existing.quartier, ville: existing.ville });
+    } else {
+      goTo('screen-name');
+      setTimeout(() => document.getElementById('nom-input').focus(), 350);
+    }
+
     setLoading(btnVerify, false, 'Vérifier');
   });
 
   // Renvoyer le code
-  document.getElementById('btn-resend').addEventListener('click', () => {
-    currentOTP = sendOTP();
-    document.getElementById('demo-code').textContent = currentOTP;
-    clearOTPBoxes();
-    startTimer(() => { clearOTPBoxes(); btnVerify.disabled = true; });
+  document.getElementById('btn-resend').addEventListener('click', async () => {
+    try {
+      await sendOTP(currentPhone);
+      clearOTPBoxes();
+      startTimer(() => { clearOTPBoxes(); btnVerify.disabled = true; });
+    } catch {
+      showAuthError('otp-error', 'Erreur lors du renvoi. Réessayez.');
+    }
   });
 
   // ────────────────────────────────────────────────
@@ -427,8 +432,9 @@ export async function initAuth(onComplete) {
       document.getElementById('auth-overlay').classList.remove('visible');
       onComplete({ telephone: currentPhone, prenom, nom, quartier, ville });
     } catch (err) {
-      console.error(err);
-      showAuthError('name-error', 'Erreur lors de la sauvegarde. Réessayez.');
+      // Afficher le message de validation (ex: type de fichier invalide, taille)
+      const msg = err?.message || 'Erreur lors de la sauvegarde. Réessayez.';
+      showAuthError('name-error', msg);
       setLoading(btnStart, false, 'Commencer 🚖');
     }
   });

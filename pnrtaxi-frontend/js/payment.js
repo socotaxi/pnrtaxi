@@ -11,8 +11,6 @@
  * @returns {{ status: 'gratuit'|'actif'|'en_attente'|'expire'|'none', expiration: string|null }}
  */
 export async function checkDriverAccess(driverId, supabase) {
-  console.log('[PNR] checkDriverAccess — driverId:', driverId);
-
   // 1. Récupérer TOUS les accès actifs non expirés + config en parallèle
   const [accessResult, config] = await Promise.all([
     supabase
@@ -24,10 +22,6 @@ export async function checkDriverAccess(driverId, supabase) {
       .order('date_expiration', { ascending: false }),
     getAppConfig(supabase),
   ]);
-
-  console.log('[PNR] config:', config);
-  console.log('[PNR] driver_access query error:', accessResult.error);
-  console.log('[PNR] actifRows:', accessResult.data);
 
   const actifRows = accessResult.data;
 
@@ -61,11 +55,8 @@ export async function checkDriverAccess(driverId, supabase) {
   }
 
   // 3. Aucun accès → vérifier si la période gratuite peut être créée
-  console.log('[PNR] gratuite_active =', config.gratuite_active);
   if (config.gratuite_active === 'true') {
-    console.log('[PNR] Tentative création accès gratuit pour:', driverId);
     const created = await createFreeAccess(driverId, supabase, parseInt(config.gratuite_duree_mois, 10));
-    console.log('[PNR] createFreeAccess résultat:', created);
     if (created) {
       return { status: 'gratuit', expiration: created.date_expiration, row: created };
     }
@@ -79,7 +70,6 @@ export async function checkDriverAccess(driverId, supabase) {
     .limit(1);
 
   const finalStatus = expiredRows && expiredRows.length > 0 ? 'expire' : 'none';
-  console.log('[PNR] statut final:', finalStatus);
   return {
     status:     finalStatus,
     expiration: null,
@@ -113,7 +103,7 @@ async function createFreeAccess(driverId, supabase, mois = 1) {
     .select()
     .single();
 
-  if (error) { console.error('Erreur création accès gratuit:', error.message, error); return null; }
+  if (error) { return null; }
   return data;
 }
 
@@ -288,8 +278,7 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
       pendingOvl.setAttribute('aria-hidden', 'false');
       if (onSuccess) onSuccess();
 
-    } catch (err) {
-      console.error('Erreur soumission paiement:', err);
+    } catch {
       errorEl.textContent = 'Une erreur est survenue. Vérifiez votre connexion et réessayez.';
     } finally {
       submitBtn.disabled       = false;

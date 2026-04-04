@@ -9,9 +9,19 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ── Mot de passe admin ────────────────────────────────────────
-const ADMIN_PASSWORD = 'Iamtheboss21300&';
-const SESSION_KEY    = 'pnr_admin_session';
+// ── Audit logging ─────────────────────────────────────────────
+async function audit(action, targetId, details) {
+  try {
+    var session = (await sb.auth.getSession()).data.session;
+    if (!session) return;
+    await sb.from('audit_log').insert({
+      admin_email: session.user.email,
+      action:      action,
+      target_id:   targetId   || null,
+      details:     details    || null,
+    });
+  } catch (_) {}
+}
 
 // ── État ─────────────────────────────────────────────────────
 let currentFilter      = 'all';
@@ -22,34 +32,19 @@ let pendingPage        = 0;
 let driversPage        = 0;
 const PAGE_SIZE        = 5;
 
-// ── Authentification simple ───────────────────────────────────
-function checkSession() {
-  return sessionStorage.getItem(SESSION_KEY) === 'ok';
+// ── Authentification via Supabase Auth ────────────────────────
+async function checkSession() {
+  var res = await sb.auth.getSession();
+  return !!(res.data && res.data.session);
 }
-function saveSession()  { sessionStorage.setItem(SESSION_KEY, 'ok'); }
-function clearSession() { sessionStorage.removeItem(SESSION_KEY); }
 
-// ── Auto-auth depuis session passager ou chauffeur ────────────
-function checkAdminFromAppSession() {
-  var keys = ['pnr_passenger', 'pnr_driver'];
-  for (var i = 0; i < keys.length; i++) {
-    try {
-      var raw = localStorage.getItem(keys[i]);
-      if (!raw) continue;
-      var s = JSON.parse(raw);
-      if (s.telephone === '212638725690' ||
-          (typeof s.email === 'string' && s.email.includes('edhemrombhot'))) {
-        return true;
-      }
-    } catch (_) {}
-  }
-  return false;
+async function clearSession() {
+  await sb.auth.signOut();
 }
 
 // ── Démarrage ─────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function () {
-  if (checkSession() || checkAdminFromAppSession()) {
-    saveSession();
+document.addEventListener('DOMContentLoaded', async function () {
+  if (await checkSession()) {
     showDashboard();
   } else {
     document.getElementById('login-screen').style.display = '';
@@ -59,25 +54,59 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 function setupLogin() {
-  var btn     = document.getElementById('login-btn');
-  var input   = document.getElementById('admin-password');
-  var errorEl = document.getElementById('login-error');
+  var btn      = document.getElementById('login-btn');
+  var emailIn  = document.getElementById('admin-email');
+  var pwdIn    = document.getElementById('admin-password');
+  var errorEl  = document.getElementById('login-error');
+  var attempts = 0;
+  var lockUntil = 0;
 
-  function tryLogin() {
-    if (input.value === ADMIN_PASSWORD) {
-      saveSession();
-      showDashboard();
-    } else {
-      errorEl.textContent       = 'Mot de passe incorrect.';
-      input.value               = '';
-      input.style.borderColor   = 'var(--red)';
-      setTimeout(function () { input.style.borderColor = ''; }, 1500);
-      input.focus();
+  async function tryLogin() {
+    // Protection brute-force côté client
+    if (Date.now() < lockUntil) {
+      var secs = Math.ceil((lockUntil - Date.now()) / 1000);
+      errorEl.textContent = 'Trop de tentatives. Attendez ' + secs + ' s.';
+      return;
     }
+
+    var email    = (emailIn.value || '').trim();
+    var password = pwdIn.value;
+    if (!email || !password) {
+      errorEl.textContent = 'Email et mot de passe requis.';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = 'Connexion…';
+    errorEl.textContent = '';
+
+    var res = await sb.auth.signInWithPassword({ email: email, password: password });
+
+    if (res.error || !res.data.session) {
+      attempts++;
+      if (attempts >= 5) {
+        lockUntil = Date.now() + 60 * 1000;
+        attempts  = 0;
+        errorEl.textContent = 'Trop de tentatives. Attendez 60 s.';
+      } else {
+        errorEl.textContent = 'Email ou mot de passe incorrect.';
+      }
+      pwdIn.value             = '';
+      pwdIn.style.borderColor = 'var(--red)';
+      setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
+      pwdIn.focus();
+    } else {
+      attempts = 0;
+      audit('login', null, { email: email });
+      showDashboard();
+    }
+
+    btn.disabled    = false;
+    btn.textContent = 'Se connecter';
   }
 
   btn.addEventListener('click', tryLogin);
-  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryLogin(); });
+  pwdIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryLogin(); });
 }
 
 // ── Afficher le dashboard ─────────────────────────────────────
@@ -105,8 +134,9 @@ async function showDashboard() {
 
   var logoutBtn = document.getElementById('admin-logout-btn');
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', function () {
-      clearSession();
+    logoutBtn.addEventListener('click', async function () {
+      await audit('logout', null, null);
+      await clearSession();
       window.location.reload();
     });
   }
@@ -115,22 +145,22 @@ async function showDashboard() {
   setupConfigSave();
   setupTabs();
   setupGrantModal();
+  setupAuditRefresh();
 
   // Chargement des données (chacun gère ses propres erreurs)
-  try { await loadConfig(); } catch(e) { console.warn('loadConfig error:', e); }
-  try { await loadKPIs(); }   catch(e) { console.warn('loadKPIs error:', e); }
-  try { await loadPendingPayments(); } catch(e) {
-    console.warn('loadPendingPayments error:', e);
+  try { await loadConfig(); } catch(_) {}
+  try { await loadKPIs(); }   catch(_) {}
+  try { await loadPendingPayments(); } catch(_) {
     var w = document.getElementById('pending-table-wrap');
     if (w) w.innerHTML = '<div class="table-empty"><div class="table-empty-icon">⚠️</div><div>Exécutez d\'abord payment.sql dans Supabase</div></div>';
   }
-  try { await loadDrivers(); } catch(e) {
-    console.warn('loadDrivers error:', e);
+  try { await loadDrivers(); } catch(_) {
     var w2 = document.getElementById('drivers-table-wrap');
     if (w2) w2.innerHTML = '<div class="table-empty"><div>Erreur de chargement des chauffeurs</div></div>';
   }
+  try { await loadAuditLog(); } catch(_) {}
 
-  try { setupRealtimeSubscription(); } catch(e) { console.warn('realtime error:', e); }
+  try { setupRealtimeSubscription(); } catch(_) {}
 }
 
 // ── Rafraîchissement global ───────────────────────────────────
@@ -204,13 +234,16 @@ function setupConfigSave() {
     var ok = true;
     for (var i = 0; i < updates.length; i++) {
       var res = await sb.from('app_config').upsert({ cle: updates[i].cle, valeur: updates[i].valeur });
-      if (res.error) { ok = false; console.error('Config save error:', res.error); break; }
+      if (res.error) { ok = false; break; }
     }
 
     btn.disabled    = false;
     btn.textContent = 'Enregistrer la configuration';
 
     if (ok) {
+      var cfg = {};
+      updates.forEach(function (u) { cfg[u.cle] = u.valeur; });
+      await audit('update_config', null, cfg);
       feedback.style.color = 'var(--green)';
       feedback.textContent = '✓ Configuration enregistrée';
       showSnackbar('Configuration mise à jour avec succès');
@@ -308,6 +341,7 @@ async function validatePayment(accessId, type) {
   if (res.error) {
     showSnackbar('Erreur lors de la validation', 'error');
   } else {
+    await audit('validate_payment', accessId, { type: type, date_expiration: exp.toISOString() });
     showSnackbar('Accès validé avec succès ✓');
     await refreshAll();
   }
@@ -319,6 +353,7 @@ async function rejectPayment(accessId) {
   if (res.error) {
     showSnackbar('Erreur lors du rejet', 'error');
   } else {
+    await audit('reject_payment', accessId, null);
     showSnackbar('Demande rejetée');
     await refreshAll();
   }
@@ -478,6 +513,7 @@ function setupGrantModal() {
       date_debut: now.toISOString(), date_expiration: exp.toISOString(), statut: 'actif',
     });
 
+    var auditTargetId = grantDriverId;
     confirmBtn.disabled    = false;
     confirmBtn.textContent = "Activer l'accès";
     modal.classList.remove('open');
@@ -486,6 +522,7 @@ function setupGrantModal() {
     if (res.error) {
       showSnackbar("Erreur lors de l'activation", 'error');
     } else {
+      await audit('grant_access', auditTargetId, { type: type, days: days, date_expiration: exp.toISOString() });
       showSnackbar('Accès activé avec succès ✓');
       await refreshAll();
     }
@@ -506,6 +543,7 @@ async function disableDriverAccess(driverId) {
   if (res.error) {
     showSnackbar('Erreur lors de la révocation', 'error');
   } else {
+    await audit('revoke_access', driverId, null);
     showSnackbar('Accès révoqué');
     await refreshAll();
   }
@@ -517,6 +555,60 @@ function setupRealtimeSubscription() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_access' }, async function () { await refreshAll(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' },       async function () { await loadKPIs(); await loadDrivers(); })
     .subscribe();
+}
+
+// ── Journal d'audit ───────────────────────────────────────────
+var ACTION_LABELS = {
+  login:            'Connexion',
+  logout:           'Déconnexion',
+  validate_payment: 'Paiement validé',
+  reject_payment:   'Paiement rejeté',
+  grant_access:     'Accès offert',
+  revoke_access:    'Accès révoqué',
+  update_config:    'Config modifiée',
+};
+
+async function loadAuditLog() {
+  var wrap = document.getElementById('audit-table-wrap');
+  if (!wrap) return;
+
+  var res = await sb
+    .from('audit_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (res.error || !res.data || res.data.length === 0) {
+    wrap.innerHTML = '<div class="table-empty"><div class="table-empty-icon">📋</div><div>Aucune action enregistrée</div></div>';
+    return;
+  }
+
+  var rows = res.data.map(function (row) {
+    var label   = ACTION_LABELS[row.action] || row.action;
+    var details = '';
+    if (row.details) {
+      try {
+        var d = typeof row.details === 'string' ? JSON.parse(row.details) : row.details;
+        details = Object.entries(d).map(function (kv) { return kv[0] + ': ' + kv[1]; }).join(' · ');
+      } catch (_) {}
+    }
+    return '<tr>'
+      + '<td data-label="Date" style="font-size:.78rem;color:var(--muted);white-space:nowrap">' + formatDate(row.created_at) + '</td>'
+      + '<td data-label="Admin" style="font-size:.82rem">' + (row.admin_email || '—') + '</td>'
+      + '<td data-label="Action"><span class="badge badge--blue" style="font-size:.75rem">' + label + '</span></td>'
+      + '<td data-label="Cible" style="font-size:.78rem;color:var(--muted);font-family:monospace">' + (row.target_id ? row.target_id.slice(0, 8) + '…' : '—') + '</td>'
+      + '<td data-label="Détails" style="font-size:.75rem;color:var(--muted)">' + (details || '—') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  wrap.innerHTML = '<div class="table-scroll"><table class="data-table">'
+    + '<thead><tr><th>Date</th><th>Admin</th><th>Action</th><th>Cible</th><th>Détails</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table></div>';
+}
+
+function setupAuditRefresh() {
+  var btn = document.getElementById('audit-refresh-btn');
+  if (btn) btn.addEventListener('click', function () { loadAuditLog(); });
 }
 
 // ── Pagination ────────────────────────────────────────────────

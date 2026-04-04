@@ -744,6 +744,16 @@
     <p class="login-sub">Entrez le mot de passe pour accéder au tableau de bord</p>
 
     <div class="login-field">
+      <label for="admin-email">Email</label>
+      <input
+        type="email"
+        id="admin-email"
+        placeholder="admin@example.com"
+        autocomplete="username"
+      />
+    </div>
+
+    <div class="login-field">
       <label for="admin-password">Mot de passe</label>
       <input
         type="password"
@@ -913,6 +923,18 @@
       </div>
 
       <div id="drivers-table-wrap">
+        <div class="table-loading"><div class="spinner-sm"></div></div>
+      </div>
+    </div>
+
+    <!-- ── Journal d'audit ── -->
+    <div class="section-title">Journal d'activité</div>
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-header-title">Actions admin</div>
+        <button class="page-btn" id="audit-refresh-btn" style="font-size:.8rem;padding:5px 12px">↻ Actualiser</button>
+      </div>
+      <div id="audit-table-wrap">
         <div class="table-loading"><div class="spinner-sm"></div></div>
       </div>
     </div>

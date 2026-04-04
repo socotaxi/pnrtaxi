@@ -6,19 +6,29 @@
 
 import { supabase } from './supabase-config.js';
 
-const SESSION_KEY  = 'pnr_driver';
-const OTP_DURATION = 5 * 60; // secondes
+const SESSION_KEY    = 'pnr_driver';
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+const OTP_DURATION   = 5 * 60; // secondes
 
 // ── Session ──────────────────────────────────────────────────
 export function getDriverSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return parsed;
   } catch { return null; }
 }
 
 function saveDriverSession(telephone, prenom, nom = null, photo = null, email = null, auth_provider = null) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ telephone, prenom, nom, photo, email, auth_provider, role: 'driver' }));
+  localStorage.setItem(SESSION_KEY, JSON.stringify({
+    telephone, prenom, nom, photo, email, auth_provider, role: 'driver',
+    expiresAt: Date.now() + SESSION_TTL_MS,
+  }));
 }
 
 export async function clearDriverSession() {
@@ -37,6 +47,9 @@ async function handleDriverOAuthCallback() {
   if (!session) return null;
 
   const user     = session.user;
+  // Session Phone Auth (OTP SMS) — ne pas traiter ici, géré dans initDriverAuth
+  if (!user.email) return null;
+
   const email    = user.email;
   const meta     = user.user_metadata || {};
   const fullName = meta.full_name || meta.name || '';
@@ -69,39 +82,41 @@ async function handleDriverOAuthCallback() {
   return { isNew: true };
 }
 
-// ── OTP (stocké en mémoire uniquement, aucune écriture DB) ───
-let _pendingDriverOTP = { code: null, expiresAt: 0 };
-
-function generateOTP() {
-  return Math.floor(1000 + Math.random() * 9000).toString();
+// ── OTP via Supabase Phone Auth ───────────────────────────────
+async function sendDriverOTP(phone) {
+  const { error } = await supabase.auth.signInWithOtp({ phone });
+  if (error) throw error;
 }
 
-async function sendDriverOTP(telephone) {
-  const code = generateOTP();
-  _pendingDriverOTP = { code, expiresAt: Date.now() + OTP_DURATION * 1000 };
+async function verifyDriverOTP(phone, token) {
+  const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
+  if (error) throw error;
+}
 
-  // Lecture seule — vérifie si le chauffeur existe déjà (compte vérifié)
-  const { data: existing } = await supabase
+async function checkExistingDriver(telephone) {
+  const { data } = await supabase
     .from('drivers')
-    .select('telephone, prenom')
+    .select('telephone, prenom, nom, photo')
     .eq('telephone', telephone)
-    .eq('verified', true)
     .maybeSingle();
-
-  // Production : remplacer par appel SMS / WhatsApp API
-  return { otp: code, isNew: !existing, existingPrenom: existing?.prenom || null };
+  return data || null;
 }
 
-function verifyDriverOTP(code) {
-  if (!_pendingDriverOTP.code) return false;
-  if (_pendingDriverOTP.code !== code) return false;
-  if (Date.now() > _pendingDriverOTP.expiresAt) return false;
-  return true;
-}
+const AVATAR_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const AVATAR_MAX_SIZE_MB   = 5;
 
 async function uploadDriverAvatar(telephone, file) {
   if (!file) return null;
-  const ext  = file.name.split('.').pop();
+
+  if (!AVATAR_ALLOWED_TYPES.includes(file.type)) {
+    throw new Error('Format non supporté. Utilisez JPEG, PNG, WebP ou GIF.');
+  }
+  if (file.size > AVATAR_MAX_SIZE_MB * 1024 * 1024) {
+    throw new Error(`Image trop lourde. Maximum ${AVATAR_MAX_SIZE_MB} Mo.`);
+  }
+
+  const extMap = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+  const ext  = extMap[file.type];
   const path = `drivers/${telephone}.${ext}`;
   const { error } = await supabase.storage
     .from('avatars')
@@ -115,7 +130,6 @@ async function saveDriverProfile(telephone, prenom, nom, avatarFile) {
   // Upload photo vers le storage uniquement — aucune écriture en DB
   // L'INSERT complet se fait à la fin de driver-vehicle.html
   const avatarUrl = await uploadDriverAvatar(telephone, avatarFile);
-  _pendingDriverOTP = { code: null, expiresAt: 0 };
   saveDriverSession(telephone, prenom, nom, avatarUrl);
 }
 
@@ -226,65 +240,40 @@ export async function initDriverAuth() {
 
   initOTPBoxes();
 
-  let currentPhone    = '';
-  let currentOTP      = '';
-  let isNewDriver     = false;
-  let existingPrenom  = null;
+  let currentPhone = '';
 
   // ── ÉCRAN 1 — Téléphone ─────────────────────────────────────
-  const btnSend     = document.getElementById('btn-send-otp');
-  const phoneInput  = document.getElementById('auth-phone-input');
-  const prefixSel   = document.getElementById('phone-prefix-select');
+  const btnSend    = document.getElementById('btn-send-otp');
+  const phoneInput = document.getElementById('auth-phone-input');
+  const prefixSel  = document.getElementById('phone-prefix-select');
 
   phoneInput.addEventListener('input', () => {
-    phoneInput.value  = phoneInput.value.replace(/\D/g, '').slice(0, 9);
-    btnSend.disabled  = phoneInput.value.length < 6;
+    phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 9);
+    btnSend.disabled = phoneInput.value.length < 6;
   });
 
   btnSend.addEventListener('click', async () => {
     const digits = phoneInput.value.trim();
     if (digits.length < 6) return;
 
-    const dialCode = prefixSel.value;
-    currentPhone   = dialCode + digits;
-    setLoading(btnSend, true, 'Connexion / Recevoir le code');
+    // Format E.164 requis par Supabase Phone Auth
+    currentPhone = '+' + prefixSel.value + digits;
+    setLoading(btnSend, true, 'Envoi du code…');
 
     try {
-      // Vérifier si le chauffeur existe déjà en base
-      const { data: existing } = await supabase
-        .from('drivers')
-        .select('telephone, prenom')
-        .eq('telephone', currentPhone)
-        .eq('verified', true)
-        .maybeSingle();
+      await sendDriverOTP(currentPhone);
 
-      if (existing) {
-        // Chauffeur connu → accès direct sans OTP
-        saveDriverSession(currentPhone, existing.prenom || 'Chauffeur');
-        window.location.replace('driver.html');
-        return;
-      }
-
-      // Nouveau chauffeur → flow OTP
-      const result = await sendDriverOTP(currentPhone);
-      currentOTP     = result.otp;
-      isNewDriver    = true;
-      existingPrenom = null;
-
-      const masked = '+' + dialCode + ' ' + digits.slice(0, 2) + ' *** ** ' + digits.slice(-2);
-      document.getElementById('otp-subtitle').textContent = `Envoyé au ${masked}`;
-      document.getElementById('demo-code').textContent    = currentOTP;
+      const masked = currentPhone.slice(0, 4) + ' *** ** ' + digits.slice(-2);
+      document.getElementById('otp-subtitle').textContent = `Code envoyé au ${masked}`;
 
       startTimer(() => { clearOTPBoxes(); document.getElementById('btn-verify-otp').disabled = true; });
       goTo('screen-otp');
       setTimeout(() => document.querySelector('.otp-box').focus(), 350);
 
-    } catch (err) {
-      console.error('[driver-auth] sendOTP error:', err);
-      const msg = err?.message || JSON.stringify(err);
-      showAuthError('phone-error', `Erreur : ${msg}`);
+    } catch {
+      showAuthError('phone-error', 'Impossible d\'envoyer le code. Vérifiez le numéro.');
     } finally {
-      setLoading(btnSend, false, 'Connexion / Recevoir le code');
+      setLoading(btnSend, false, 'Recevoir le code');
     }
   });
 
@@ -299,12 +288,13 @@ export async function initDriverAuth() {
 
   btnVerify.addEventListener('click', async () => {
     const code = getOTPValue();
-    if (code.length < 4) return;
+    if (code.length < 6) return;
 
-    setLoading(btnVerify, true, 'Vérifier');
-    const ok = verifyDriverOTP(code);
+    setLoading(btnVerify, true, 'Vérification…');
 
-    if (!ok) {
+    try {
+      await verifyDriverOTP(currentPhone, code);
+    } catch {
       showAuthError('otp-error', 'Code incorrect ou expiré.');
       clearOTPBoxes();
       setLoading(btnVerify, false, 'Vérifier');
@@ -314,22 +304,20 @@ export async function initDriverAuth() {
     clearInterval(timerInterval);
     setLoading(btnVerify, false, 'Vérifier');
 
-    if (isNewDriver) {
-      // Inscription → prénom
+    // OTP valide — vérifier si le chauffeur a déjà un compte
+    const existing = await checkExistingDriver(currentPhone);
+    if (existing) {
+      saveDriverSession(currentPhone, existing.prenom || 'Chauffeur', existing.nom, existing.photo);
+      window.location.replace('driver.html');
+    } else {
       goTo('screen-name');
       setTimeout(() => document.getElementById('prenom-input').focus(), 350);
-    } else {
-      // Connexion → prénom déjà chargé lors de sendDriverOTP
-      saveDriverSession(currentPhone, existingPrenom || 'Chauffeur');
-      window.location.replace('driver.html');
     }
   });
 
   document.getElementById('btn-resend').addEventListener('click', async () => {
     try {
-      const result = await sendDriverOTP(currentPhone);
-      currentOTP   = result.otp;
-      document.getElementById('demo-code').textContent = currentOTP;
+      await sendDriverOTP(currentPhone);
       clearOTPBoxes();
       startTimer(() => { clearOTPBoxes(); btnVerify.disabled = true; });
     } catch {
@@ -391,8 +379,8 @@ export async function initDriverAuth() {
       await saveDriverProfile(currentPhone, prenom, nom, selectedAvatar);
       window.location.replace('driver-vehicle.html');
     } catch (err) {
-      console.error(err);
-      showAuthError('name-error', 'Erreur lors de la sauvegarde. Réessayez.');
+      const msg = err?.message || 'Erreur lors de la sauvegarde. Réessayez.';
+      showAuthError('name-error', msg);
       setLoading(btnStart, false, 'Continuer');
     }
   });

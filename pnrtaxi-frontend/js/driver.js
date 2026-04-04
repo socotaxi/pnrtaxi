@@ -110,13 +110,13 @@ async function loadDashboard() {
   // (couvre le cas où le realtime ne serait pas activé pour app_config)
   setInterval(() => refreshAccessBadge(), 30_000);
 
-  if (isAdminDriver()) injectAdminNavDriver();
+  if (await isAdminDriver()) injectAdminNavDriver();
 }
 
 // ── Détection admin chauffeur ────────────────────────────────
-function isAdminDriver() {
-  return currentPhone === '212638725690'
-      || (typeof currentDriver?.email === 'string' && currentDriver.email.includes('edhemrombhot'));
+async function isAdminDriver() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return !!session;
 }
 
 function injectAdminNavDriver() {
