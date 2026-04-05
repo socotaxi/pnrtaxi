@@ -4,7 +4,10 @@
 //              Network Only pour les données Supabase
 // ============================================================
 
-const CACHE_NAME   = 'taxi-pnr-v4';
+const CACHE_NAME   = 'taxi-pnr-v5';
+// Seuls les assets locaux sont pré-cachés.
+// Les ressources CDN (Leaflet, Supabase, Fonts) sont mises en cache
+// automatiquement à leur premier accès (Cache First strategy ci-dessous).
 const CACHE_URLS   = [
   '/',
   '/index.html',
@@ -17,11 +20,6 @@ const CACHE_URLS   = [
   '/js/driver.js',
   '/js/haversine.js',
   '/manifest.json',
-  // Leaflet (depuis CDN — mis en cache au premier accès)
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  // Fonts
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
 ];
 
 // ── Installation : pré-cache des assets ──────────────────────
