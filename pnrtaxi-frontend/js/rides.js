@@ -52,7 +52,7 @@ export function watchActiveRide(passengerId, callback) {
     .in('status', ['pending', 'accepted'])
     .order('created_at', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
     .then(({ data }) => { if (data) callback(data); });
 
   // Écouter les changements en temps réel

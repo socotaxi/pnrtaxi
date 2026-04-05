@@ -1,6 +1,6 @@
 // ============================================================
 //  auth.js — Système d'authentification PNR Taxi
-//  Flow téléphone : Numéro → vérification en base → session
+//  Flow téléphone : Numéro → lookup → mot de passe OU inscription
 //  Flow OAuth     : Google / Facebook → session
 // ============================================================
 
@@ -48,14 +48,12 @@ async function handleOAuthCallback() {
 
   const user = session.user;
 
-  // Ignorer les connexions email/password (admin ou autre) — seul OAuth est concerné ici
   const provider = user.app_metadata?.provider || 'email';
   if (provider === 'email') {
-    localStorage.removeItem(SESSION_KEY); // purger toute session passager stale liée à ce compte
+    localStorage.removeItem(SESSION_KEY);
     return null;
   }
 
-  // Ne pas traiter le compte admin comme un passager OAuth
   const sessionMeta = user.user_metadata || {};
   if (sessionMeta.role === 'admin') {
     localStorage.removeItem(SESSION_KEY);
@@ -81,20 +79,30 @@ async function handleOAuthCallback() {
   return { prenom, nom, email, auth_provider: provider };
 }
 
-// ── Lookup téléphone via RPC (sans OTP) ──────────────────────
+// ── RPCs téléphone ────────────────────────────────────────────
 async function findPassengerByPhone(telephone) {
   const { data, error } = await supabase.rpc('get_passenger_by_phone', { p_telephone: telephone });
   if (error || !data || data.length === 0) return null;
   return data[0];
 }
 
-async function registerPassenger(telephone, prenom, nom, quartier, ville) {
+async function verifyPassword(telephone, password) {
+  const { data, error } = await supabase.rpc('verify_passenger_password', {
+    p_telephone: telephone,
+    p_password:  password,
+  });
+  if (error || !data || data.length === 0) return null;
+  return data[0];
+}
+
+async function registerPassenger(telephone, prenom, nom, quartier, ville, password) {
   const { error } = await supabase.rpc('upsert_passenger', {
     p_telephone: telephone,
     p_prenom:    prenom,
     p_nom:       nom,
     p_quartier:  quartier,
     p_ville:     ville,
+    p_password:  password,
   });
   if (error) throw error;
 }
@@ -142,6 +150,23 @@ function showAuthError(id, msg) {
   setTimeout(() => el.classList.remove('show'), 5000);
 }
 
+// Bascule afficher / masquer un champ mot de passe
+function bindTogglePassword(btnId, inputId, eyeId) {
+  const btn   = document.getElementById(btnId);
+  const input = document.getElementById(inputId);
+  const eye   = document.getElementById(eyeId);
+  if (!btn || !input) return;
+
+  const eyeOpen = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  const eyeOff  = `<line x1="1"  y1="1"  x2="23" y2="23"/><path d="M10.58 10.58A2 2 0 0 0 14 12a2 2 0 0 1-2.83 2.83"/><path d="M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18.06 18.06 0 0 1-5.19 5.19M6.53 6.53A18.33 18.33 0 0 0 1 12s4 8 11 8a9 9 0 0 0 4.76-1.37"/>`;
+
+  btn.addEventListener('click', () => {
+    const hidden = input.type === 'password';
+    input.type   = hidden ? 'text' : 'password';
+    if (eye) eye.innerHTML = hidden ? eyeOff : eyeOpen;
+  });
+}
+
 // ── Point d'entrée principal ──────────────────────────────────
 export async function initAuth(onComplete) {
   // 1. Retour de redirection OAuth ?
@@ -171,18 +196,23 @@ export async function initAuth(onComplete) {
     catch { showAuthError('phone-error', 'Erreur Facebook. Réessayez.'); }
   });
 
+  // Bascule afficher/masquer (tous les champs PW)
+  bindTogglePassword('btn-pw-toggle-login',   'pw-input',          'pw-eye-login');
+  bindTogglePassword('btn-pw-toggle-signup',  'signup-pw-input',   'pw-eye-signup');
+  bindTogglePassword('btn-pw-toggle-confirm', 'signup-pw-confirm', 'pw-eye-confirm');
+
   let currentPhone = '';
 
-  // ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
   // ÉCRAN 1 — Numéro de téléphone
-  // ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
   const btnSend      = document.getElementById('btn-send-otp');
   const phoneInput   = document.getElementById('auth-phone-input');
   const prefixSelect = document.getElementById('phone-prefix-select');
 
   phoneInput.addEventListener('input', () => {
-    phoneInput.value  = phoneInput.value.replace(/\D/g, '').slice(0, 9);
-    btnSend.disabled  = phoneInput.value.length < 6;
+    phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 9);
+    btnSend.disabled = phoneInput.value.length < 6;
   });
 
   btnSend.addEventListener('click', async () => {
@@ -196,20 +226,10 @@ export async function initAuth(onComplete) {
       const existing = await findPassengerByPhone(currentPhone);
 
       if (existing) {
-        // Numéro connu → connexion directe
-        saveSession(
-          existing.telephone, existing.prenom, existing.nom,
-          existing.email, existing.auth_provider, existing.avatar_url,
-          existing.quartier, existing.ville
-        );
-        document.getElementById('auth-overlay').classList.remove('visible');
-        onComplete({
-          telephone: existing.telephone,
-          prenom:    existing.prenom,
-          nom:       existing.nom,
-          quartier:  existing.quartier,
-          ville:     existing.ville,
-        });
+        // Numéro connu → demander le mot de passe
+        document.getElementById('pw-phone-display').textContent = currentPhone;
+        goTo('screen-password');
+        setTimeout(() => document.getElementById('pw-input').focus(), 350);
       } else {
         // Numéro inconnu → inscription
         goTo('screen-name');
@@ -222,14 +242,67 @@ export async function initAuth(onComplete) {
     }
   });
 
-  // ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // ÉCRAN 1b — Mot de passe (connexion compte existant)
+  // ════════════════════════════════════════════════════════════
+  const pwInput  = document.getElementById('pw-input');
+  const btnLogin = document.getElementById('btn-login-pw');
+
+  // Retour à l'écran téléphone
+  document.getElementById('btn-change-phone')?.addEventListener('click', () => {
+    pwInput.value    = '';
+    btnLogin.disabled = true;
+    goTo('screen-phone');
+  });
+
+  pwInput?.addEventListener('input', () => {
+    btnLogin.disabled = pwInput.value.length < 4;
+  });
+
+  btnLogin?.addEventListener('click', async () => {
+    const password = pwInput.value;
+    if (password.length < 4) return;
+
+    setLoading(btnLogin, true, 'Connexion…');
+
+    try {
+      const profile = await verifyPassword(currentPhone, password);
+
+      if (!profile) {
+        showAuthError('pw-error', 'Mot de passe incorrect. Réessayez.');
+        return;
+      }
+
+      saveSession(
+        profile.telephone, profile.prenom, profile.nom,
+        profile.email, profile.auth_provider, profile.avatar_url,
+        profile.quartier, profile.ville
+      );
+      document.getElementById('auth-overlay').classList.remove('visible');
+      onComplete({
+        telephone: profile.telephone,
+        prenom:    profile.prenom,
+        nom:       profile.nom,
+        quartier:  profile.quartier,
+        ville:     profile.ville,
+      });
+    } catch {
+      showAuthError('pw-error', 'Erreur de connexion. Réessayez.');
+    } finally {
+      setLoading(btnLogin, false, 'Se connecter');
+    }
+  });
+
+  // ════════════════════════════════════════════════════════════
   // ÉCRAN 2 — Profil (nouveau passager)
-  // ────────────────────────────────────────────────
-  const nomInput      = document.getElementById('nom-input');
-  const prenomInput   = document.getElementById('prenom-input');
-  const villeInput    = document.getElementById('ville-input');
-  const quartierInput = document.getElementById('quartier-input');
-  const btnStart      = document.getElementById('btn-save-name');
+  // ════════════════════════════════════════════════════════════
+  const nomInput        = document.getElementById('nom-input');
+  const prenomInput     = document.getElementById('prenom-input');
+  const villeInput      = document.getElementById('ville-input');
+  const quartierInput   = document.getElementById('quartier-input');
+  const signupPwInput   = document.getElementById('signup-pw-input');
+  const signupPwConfirm = document.getElementById('signup-pw-confirm');
+  const btnStart        = document.getElementById('btn-save-name');
 
   // ── Sélecteur de rôle ──────────────────────────
   let selectedRole = 'passenger';
@@ -251,7 +324,7 @@ export async function initAuth(onComplete) {
     });
   }
 
-  // ── Avatar (présent sur login.html, absent sur passenger.html) ─
+  // ── Avatar ──────────────────────────────────────
   const avatarPicker   = document.getElementById('avatar-picker');
   const avatarFile     = document.getElementById('avatar-file');
   const avatarCamera   = document.getElementById('avatar-camera');
@@ -285,24 +358,51 @@ export async function initAuth(onComplete) {
     avatarCamera.addEventListener('change', () => applyAvatarFile(avatarCamera.files[0]));
   }
 
-  function checkNameReady() {
-    btnStart.disabled = nomInput.value.trim().length < 2
-      || prenomInput.value.trim().length < 2
-      || (villeInput    ? villeInput.value.trim().length < 2    : false)
-      || (quartierInput ? quartierInput.value.trim().length < 2 : false);
+  // ── Validation formulaire inscription ──────────
+  function checkSignupReady() {
+    const pw      = signupPwInput?.value   || '';
+    const confirm = signupPwConfirm?.value || '';
+
+    const namesOk = nomInput.value.trim().length >= 2
+      && prenomInput.value.trim().length >= 2
+      && (villeInput    ? villeInput.value.trim().length    >= 2 : false)
+      && (quartierInput ? quartierInput.value.trim().length >= 2 : false);
+
+    const pwOk = pw.length >= 6 && pw === confirm;
+
+    btnStart.disabled = !(namesOk && pwOk);
+
+    // Indicateur visuel si les mots de passe ne correspondent pas
+    if (signupPwConfirm && confirm.length > 0 && pw !== confirm) {
+      signupPwConfirm.style.borderColor = 'var(--red, #ef4444)';
+    } else if (signupPwConfirm) {
+      signupPwConfirm.style.borderColor = '';
+    }
   }
 
-  nomInput.addEventListener('input',    checkNameReady);
-  prenomInput.addEventListener('input', checkNameReady);
-  villeInput?.addEventListener('input',    checkNameReady);
-  quartierInput?.addEventListener('input', checkNameReady);
+  nomInput.addEventListener('input',           checkSignupReady);
+  prenomInput.addEventListener('input',        checkSignupReady);
+  villeInput?.addEventListener('input',        checkSignupReady);
+  quartierInput?.addEventListener('input',     checkSignupReady);
+  signupPwInput?.addEventListener('input',     checkSignupReady);
+  signupPwConfirm?.addEventListener('input',   checkSignupReady);
 
   btnStart.addEventListener('click', async () => {
     const nom      = nomInput.value.trim();
     const prenom   = prenomInput.value.trim();
     const ville    = villeInput?.value.trim()    || '';
     const quartier = quartierInput?.value.trim() || '';
+    const password = signupPwInput?.value        || '';
+
     if (nom.length < 2 || prenom.length < 2) return;
+    if (password.length < 6) {
+      showAuthError('name-error', 'Le mot de passe doit faire au moins 6 caractères.');
+      return;
+    }
+    if (password !== (signupPwConfirm?.value || '')) {
+      showAuthError('name-error', 'Les mots de passe ne correspondent pas.');
+      return;
+    }
 
     // ── Rôle Chauffeur → redirection avec prefill ──
     if (selectedRole === 'driver') {
@@ -319,7 +419,7 @@ export async function initAuth(onComplete) {
     setLoading(btnStart, true, 'Inscription…');
 
     try {
-      await registerPassenger(currentPhone, prenom, nom, quartier, ville);
+      await registerPassenger(currentPhone, prenom, nom, quartier, ville, password);
 
       let avatarUrl = null;
       if (selectedAvatar) {

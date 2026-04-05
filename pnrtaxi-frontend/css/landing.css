@@ -555,6 +555,74 @@ body { font-family: 'Inter', sans-serif; color: var(--text-primary); background:
   height: 20px;
 }
 
+/* ── Bouton Chauffeur FAB ── */
+.ln-bottom-nav-driver {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+}
+
+.ln-driver-fab {
+  position: absolute;
+  top: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: linear-gradient(145deg, #4f46e5, #2563eb);
+  border-radius: 32px;
+  box-shadow: 0 4px 18px rgba(79, 70, 229, 0.55), 0 0 0 4px white, 0 0 0 7px rgba(79, 70, 229, 0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ln-driver-fab-ring {
+  position: absolute;
+  inset: -7px;
+  border-radius: 36px;
+  border: 2px dashed rgba(255, 255, 255, 0.5);
+  animation: ln-ring-spin 8s linear infinite;
+}
+
+@keyframes ln-ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.ln-driver-fab-svg {
+  width: 24px;
+  height: 24px;
+  color: white;
+  stroke: white;
+  position: relative;
+  z-index: 1;
+}
+
+.ln-driver-fab-label {
+  color: #ef4444;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: capitalize;
+  position: relative;
+  z-index: 1;
+  line-height: 1;
+}
+
+.ln-bottom-nav-driver:active .ln-driver-fab {
+  transform: translateX(-50%) scale(0.93);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4), 0 0 0 4px white, 0 0 0 6px rgba(79, 70, 229, 0.15);
+}
+
 body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
 /* ── Responsive ── */
