@@ -35,7 +35,9 @@ const PAGE_SIZE        = 5;
 // ── Authentification via Supabase Auth ────────────────────────
 async function checkSession() {
   var res = await sb.auth.getSession();
-  return !!(res.data && res.data.session);
+  if (!res.data || !res.data.session) return false;
+  var meta = res.data.session.user.user_metadata || {};
+  return meta.role === 'admin';
 }
 
 async function clearSession() {
@@ -96,9 +98,17 @@ function setupLogin() {
       setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
       pwdIn.focus();
     } else {
-      attempts = 0;
-      audit('login', null, { email: email });
-      showDashboard();
+      var meta = res.data.session.user.user_metadata || {};
+      if (meta.role !== 'admin') {
+        await sb.auth.signOut();
+        errorEl.textContent = 'Accès refusé : compte non administrateur.';
+        pwdIn.style.borderColor = 'var(--red)';
+        setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
+      } else {
+        attempts = 0;
+        audit('login', null, { email: email });
+        showDashboard();
+      }
     }
 
     btn.disabled    = false;
