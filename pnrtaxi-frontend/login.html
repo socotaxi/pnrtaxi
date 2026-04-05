@@ -244,7 +244,7 @@
 
       <div class="auth-card">
         <h2 class="auth-title" id="screen-phone-title">Votre numéro de téléphone</h2>
-        <p class="auth-subtitle" id="screen-phone-subtitle">Entrez votre numéro pour recevoir un code de vérification</p>
+        <p class="auth-subtitle" id="screen-phone-subtitle">Entrez votre numéro pour vous connecter ou créer un compte</p>
 
         <div class="phone-input-wrapper">
           <select id="phone-prefix-select" class="phone-prefix-select">
@@ -293,7 +293,7 @@
         <div class="auth-error" id="phone-error"></div>
 
         <button class="btn-auth" id="btn-send-otp" disabled>
-          Connexion / Recevoir le code
+          Continuer
         </button>
       </div>
 
@@ -330,46 +330,12 @@
     </div>
   </div>
 
-  <!-- ── ÉCRAN 2 : Code OTP ── -->
-  <div id="screen-otp" class="auth-screen">
-    <div class="auth-content">
-
-      <button class="auth-back" id="btn-back-phone">← Retour</button>
-
-      <div class="auth-hero" style="margin-top:48px">
-        <div class="auth-logo-icon">🔐</div>
-      </div>
-
-      <div class="auth-card">
-        <h2 class="auth-title">Code de vérification</h2>
-        <p class="auth-subtitle" id="otp-subtitle">Envoyé au +242 XX XXX XX XX</p>
-
-        <div class="otp-boxes">
-          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
-          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
-          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
-          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
-          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
-          <input class="otp-box" type="text" maxlength="1" inputmode="numeric" />
-        </div>
-
-        <div class="otp-timer" id="otp-timer">⏱ 05:00</div>
-        <button class="otp-resend" id="btn-resend" disabled>Renvoyer le code</button>
-
-        <div class="auth-error" id="otp-error"></div>
-
-        <button class="btn-auth" id="btn-verify-otp" disabled>Vérifier</button>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ── ÉCRAN 3 : Prénom ── -->
+  <!-- ── ÉCRAN 2 : Profil (nouveau passager) ── -->
   <div id="screen-name" class="auth-screen">
     <div class="auth-content">
 
       <div class="auth-hero" style="margin-top:60px">
-        <div class="verified-chip">✅ Numéro vérifié</div>
+        <div class="verified-chip">✨ Nouveau compte</div>
         <div class="auth-brand">Bienvenue !</div>
       </div>
 
