@@ -43,7 +43,38 @@ export async function loginWithOAuth(provider) {
 }
 
 async function handleOAuthCallback() {
-  const { data: { session } } = await supabase.auth.getSession();
+  // Détecte un retour OAuth (PKCE : ?code=… | implicite : #access_token=…)
+  const url = new URL(window.location.href);
+  const isCallback = url.searchParams.has('code') || url.hash.includes('access_token');
+  if (!isCallback) return null;
+
+  // L'échange du code PKCE est asynchrone : on écoute onAuthStateChange
+  // ET on vérifie getSession() en parallèle pour ne rater aucun cas.
+  const session = await new Promise((resolve) => {
+    let done = false;
+    const finish = (s) => { if (!done) { done = true; resolve(s); } };
+    const timer = setTimeout(() => finish(null), 10000);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_IN' && s) {
+        clearTimeout(timer);
+        subscription.unsubscribe();
+        finish(s);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        clearTimeout(timer);
+        subscription.unsubscribe();
+        finish(data.session);
+      }
+    });
+  });
+
+  // Nettoie l'URL (le code PKCE est à usage unique)
+  window.history.replaceState({}, '', window.location.pathname);
+
   if (!session) return null;
 
   const user = session.user;
