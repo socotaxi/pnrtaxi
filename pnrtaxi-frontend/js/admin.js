@@ -9,16 +9,18 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ── Compte admin ──────────────────────────────────────────────
+const ADMIN_PHONE    = '+242050787624';
+const ADMIN_KEY      = 'pnr_admin';
+
 // ── Audit logging ─────────────────────────────────────────────
 async function audit(action, targetId, details) {
   try {
-    var session = (await sb.auth.getSession()).data.session;
-    if (!session) return;
-    await sb.from('audit_log').insert({
-      admin_email: session.user.email,
-      action:      action,
-      target_id:   targetId   || null,
-      details:     details    || null,
+    await sb.rpc('insert_audit_log', {
+      p_admin_phone: ADMIN_PHONE,
+      p_action:      action,
+      p_target_id:   targetId || null,
+      p_details:     details  ? details : null,
     });
   } catch (_) {}
 }
@@ -26,22 +28,20 @@ async function audit(action, targetId, details) {
 // ── État ─────────────────────────────────────────────────────
 let currentFilter      = 'all';
 let grantDriverId      = null;
+let appConfig          = {};
 let allDrivers         = [];
 let allPendingPayments = [];
 let pendingPage        = 0;
 let driversPage        = 0;
 const PAGE_SIZE        = 5;
 
-// ── Authentification via Supabase Auth ────────────────────────
+// ── Authentification par numéro + mot de passe ────────────────
 async function checkSession() {
-  var res = await sb.auth.getSession();
-  if (!res.data || !res.data.session) return false;
-  var meta = res.data.session.user.user_metadata || {};
-  return meta.role === 'admin';
+  return sessionStorage.getItem(ADMIN_KEY) === ADMIN_PHONE;
 }
 
 async function clearSession() {
-  await sb.auth.signOut();
+  sessionStorage.removeItem(ADMIN_KEY);
 }
 
 // ── Démarrage ─────────────────────────────────────────────────
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
 function setupLogin() {
   var btn      = document.getElementById('login-btn');
-  var emailIn  = document.getElementById('admin-email');
+  var phoneIn  = document.getElementById('admin-phone');
   var pwdIn    = document.getElementById('admin-password');
   var errorEl  = document.getElementById('login-error');
   var attempts = 0;
@@ -71,10 +71,10 @@ function setupLogin() {
       return;
     }
 
-    var email    = (emailIn.value || '').trim();
+    var phone    = (phoneIn.value || '').trim();
     var password = pwdIn.value;
-    if (!email || !password) {
-      errorEl.textContent = 'Email et mot de passe requis.';
+    if (!phone || !password) {
+      errorEl.textContent = 'Numéro et mot de passe requis.';
       return;
     }
 
@@ -82,33 +82,33 @@ function setupLogin() {
     btn.textContent = 'Connexion…';
     errorEl.textContent = '';
 
-    var res = await sb.auth.signInWithPassword({ email: email, password: password });
+    var res = await sb.rpc('verify_passenger_password', {
+      p_telephone: phone,
+      p_password:  password,
+    });
 
-    if (res.error || !res.data.session) {
+    if (res.error || !res.data || res.data.length === 0) {
       attempts++;
       if (attempts >= 5) {
         lockUntil = Date.now() + 60 * 1000;
         attempts  = 0;
         errorEl.textContent = 'Trop de tentatives. Attendez 60 s.';
       } else {
-        errorEl.textContent = 'Email ou mot de passe incorrect.';
+        errorEl.textContent = 'Numéro ou mot de passe incorrect.';
       }
       pwdIn.value             = '';
       pwdIn.style.borderColor = 'var(--red)';
       setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
       pwdIn.focus();
+    } else if (res.data[0].telephone !== ADMIN_PHONE) {
+      errorEl.textContent = 'Accès refusé : compte non administrateur.';
+      pwdIn.style.borderColor = 'var(--red)';
+      setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
     } else {
-      var meta = res.data.session.user.user_metadata || {};
-      if (meta.role !== 'admin') {
-        await sb.auth.signOut();
-        errorEl.textContent = 'Accès refusé : compte non administrateur.';
-        pwdIn.style.borderColor = 'var(--red)';
-        setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
-      } else {
-        attempts = 0;
-        audit('login', null, { email: email });
-        showDashboard();
-      }
+      attempts = 0;
+      sessionStorage.setItem(ADMIN_KEY, ADMIN_PHONE);
+      audit('login', null, { telephone: phone });
+      showDashboard();
     }
 
     btn.disabled    = false;
@@ -212,6 +212,7 @@ async function loadConfig() {
 
   var cfg = {};
   res.data.forEach(function (r) { cfg[r.cle] = r.valeur; });
+  appConfig = cfg;
 
   var gratuiteEl = document.getElementById('cfg-gratuite');
   var dureeEl    = document.getElementById('cfg-duree');
@@ -234,26 +235,24 @@ function setupConfigSave() {
     btn.textContent = 'Enregistrement…';
     feedback.textContent = '';
 
-    var updates = [
-      { cle: 'gratuite_active',     valeur: document.getElementById('cfg-gratuite')?.checked ? 'true' : 'false' },
-      { cle: 'gratuite_duree_mois', valeur: document.getElementById('cfg-duree')?.value || '1' },
-      { cle: 'tarif_journee',       valeur: document.getElementById('cfg-journee')?.value || '500' },
-      { cle: 'tarif_semaine',       valeur: document.getElementById('cfg-semaine')?.value || '1000' },
-    ];
+    var updatesObj = {
+      gratuite_active:     document.getElementById('cfg-gratuite')?.checked ? 'true' : 'false',
+      gratuite_duree_mois: document.getElementById('cfg-duree')?.value || '1',
+      tarif_journee:       document.getElementById('cfg-journee')?.value || '500',
+      tarif_semaine:       document.getElementById('cfg-semaine')?.value || '1000',
+    };
 
-    var ok = true;
-    for (var i = 0; i < updates.length; i++) {
-      var res = await sb.from('app_config').upsert({ cle: updates[i].cle, valeur: updates[i].valeur });
-      if (res.error) { ok = false; break; }
-    }
+    var res = await sb.rpc('update_app_config', {
+      p_updates:     updatesObj,
+      p_admin_phone: ADMIN_PHONE,
+    });
+    var ok = !res.error;
 
     btn.disabled    = false;
     btn.textContent = 'Enregistrer la configuration';
 
     if (ok) {
-      var cfg = {};
-      updates.forEach(function (u) { cfg[u.cle] = u.valeur; });
-      await audit('update_config', null, cfg);
+      await audit('update_config', null, updatesObj);
       feedback.style.color = 'var(--green)';
       feedback.textContent = '✓ Configuration enregistrée';
       showSnackbar('Configuration mise à jour avec succès');
@@ -488,7 +487,13 @@ function setupGrantModal() {
   var customWrap = document.getElementById('grant-custom-days-wrap');
 
   typeSelect && typeSelect.addEventListener('change', function () {
-    customWrap.style.display = typeSelect.value === 'gratuit' ? '' : 'none';
+    var isGratuit = typeSelect.value === 'gratuit';
+    customWrap.style.display = isGratuit ? '' : 'none';
+    if (isGratuit) {
+      var mois = parseInt(appConfig.gratuite_duree_mois || '1', 10);
+      var grantDaysEl = document.getElementById('grant-days');
+      if (grantDaysEl) grantDaysEl.value = mois * 30;
+    }
   });
 
   cancelBtn && cancelBtn.addEventListener('click', function () {

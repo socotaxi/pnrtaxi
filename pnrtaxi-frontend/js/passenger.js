@@ -936,13 +936,24 @@ function startApp(s) {
   const passengerId = session.telephone || session.email;
   if (passengerId && !isAdminSession(session)) {
     watchActiveRide(passengerId, updateRideBanner);
+
+    // Polling de secours : re-vérifie le statut de la course active toutes les 10 s
+    // pour rattraper les événements realtime éventuellement manqués
+    setInterval(async () => {
+      if (!activeRide || activeRide.status === 'rejected' || activeRide.status === 'cancelled') return;
+      const { data } = await supabase
+        .from('rides')
+        .select('*, drivers(*)')
+        .eq('id', activeRide.id)
+        .maybeSingle();
+      if (data && data.status !== activeRide.status) updateRideBanner(data);
+    }, 10_000);
   }
 }
 
 // ── Détection admin ──────────────────────────────────────────
 function isAdminSession(s) {
-  return s?.telephone === '212638725690'
-      || (typeof s?.email === 'string' && s.email.includes('edhemrombhot'));
+  return s?.telephone === '+242050787624';
 }
 
 function injectAdminNav() {

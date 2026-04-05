@@ -1,7 +1,6 @@
 // ============================================================
 //  driver-auth.js — Authentification chauffeur PNR Taxi
-//  Flow téléphone : Numéro → vérification en base → session
-//  Flow OAuth     : Google / Facebook → session
+//  Flow téléphone : Numéro → lookup → mot de passe OU inscription
 // ============================================================
 
 import { supabase } from './supabase-config.js';
@@ -34,56 +33,7 @@ export async function clearDriverSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
-// ── OAuth (Google / Facebook) ─────────────────────────────────
-export async function loginDriverWithOAuth(provider) {
-  const redirectTo = window.location.href.split('?')[0].split('#')[0];
-  const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } });
-  if (error) throw error;
-}
-
-async function handleDriverOAuthCallback() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return null;
-
-  const user = session.user;
-
-  // Ignorer les connexions email/password — seul OAuth (Google/Facebook) est concerné ici
-  const appProvider = user.app_metadata?.provider || 'email';
-  if (appProvider === 'email') {
-    localStorage.removeItem(SESSION_KEY); // purger toute session chauffeur stale liée à ce compte
-    return null;
-  }
-
-  if (!user.email) return null;
-
-  const email    = user.email;
-  const meta     = user.user_metadata || {};
-  const fullName = meta.full_name || meta.name || '';
-  const prenom   = fullName.split(' ')[0] || email.split('@')[0] || 'Chauffeur';
-  const provider = user.app_metadata?.provider || 'oauth';
-
-  const { data: existing } = await supabase
-    .from('drivers')
-    .select('telephone, prenom, nom, photo')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (existing) {
-    saveDriverSession(null, existing.prenom || prenom, existing.nom, existing.photo, email, provider);
-    return { isNew: false };
-  }
-
-  try {
-    await supabase.from('drivers').insert({
-      email, prenom, auth_provider: provider, verified: true, telephone: null,
-    });
-  } catch (_) {}
-
-  saveDriverSession(null, prenom, null, null, email, provider);
-  return { isNew: true };
-}
-
-// ── Lookup chauffeur par téléphone (sans OTP) ─────────────────
+// ── RPCs téléphone ────────────────────────────────────────────
 async function findDriverByPhone(telephone) {
   const { data } = await supabase
     .from('drivers')
@@ -91,6 +41,15 @@ async function findDriverByPhone(telephone) {
     .eq('telephone', telephone)
     .maybeSingle();
   return data || null;
+}
+
+async function verifyDriverPassword(telephone, password) {
+  const { data, error } = await supabase.rpc('verify_driver_password', {
+    p_telephone: telephone,
+    p_password:  password,
+  });
+  if (error || !data || data.length === 0) return null;
+  return data[0];
 }
 
 // ── Avatar upload ─────────────────────────────────────────────
@@ -136,23 +95,37 @@ function showAuthError(id, msg) {
   setTimeout(() => el.classList.remove('show'), 5000);
 }
 
+function bindTogglePassword(btnId, inputId, eyeId) {
+  const btn   = document.getElementById(btnId);
+  const input = document.getElementById(inputId);
+  const eye   = document.getElementById(eyeId);
+  if (!btn || !input) return;
+
+  const eyeOpen = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  const eyeOff  = `<line x1="1"  y1="1"  x2="23" y2="23"/><path d="M10.58 10.58A2 2 0 0 0 14 12a2 2 0 0 1-2.83 2.83"/><path d="M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18.06 18.06 0 0 1-5.19 5.19M6.53 6.53A18.33 18.33 0 0 0 1 12s4 8 11 8a9 9 0 0 0 4.76-1.37"/>`;
+
+  btn.addEventListener('click', () => {
+    const hidden = input.type === 'password';
+    input.type   = hidden ? 'text' : 'password';
+    if (eye) eye.innerHTML = hidden ? eyeOff : eyeOpen;
+  });
+}
+
 // ── Point d'entrée ───────────────────────────────────────────
 export async function initDriverAuth() {
-  // 1. Retour OAuth ?
-  const oauthResult = await handleDriverOAuthCallback();
-  if (oauthResult !== null) {
-    window.location.replace(oauthResult.isNew ? 'driver-vehicle.html' : 'driver.html');
-    return;
-  }
-
-  // 2. Session locale existante ?
+  // 1. Session locale existante ?
   const session = getDriverSession();
   if (session) {
     window.location.replace('driver.html');
     return;
   }
 
-  // 3. Prefill depuis le formulaire passager ?
+  // Bascule afficher/masquer
+  bindTogglePassword('btn-pw-toggle-login',   'pw-input',          'pw-eye-login');
+  bindTogglePassword('btn-pw-toggle-signup',  'signup-pw-input',   'pw-eye-signup');
+  bindTogglePassword('btn-pw-toggle-confirm', 'signup-pw-confirm', 'pw-eye-confirm');
+
+  // 2. Prefill depuis le formulaire passager ?
   const params  = new URLSearchParams(location.search);
   const prefill = params.get('prefill') === '1'
     ? (() => { try { return JSON.parse(sessionStorage.getItem('pnr_driver_prefill') || ''); } catch { return null; } })()
@@ -164,7 +137,9 @@ export async function initDriverAuth() {
 
   let currentPhone = prefill?.telephone || '';
 
-  // ── ÉCRAN 1 — Téléphone ─────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // ÉCRAN 1 — Téléphone
+  // ════════════════════════════════════════════════════════════
   const btnSend    = document.getElementById('btn-send-otp');
   const phoneInput = document.getElementById('auth-phone-input');
   const prefixSel  = document.getElementById('phone-prefix-select');
@@ -176,7 +151,6 @@ export async function initDriverAuth() {
     const nomEl    = document.getElementById('nom-input');
     if (prenomEl) prenomEl.value = prefill.prenom || '';
     if (nomEl)    nomEl.value    = prefill.nom    || '';
-    // Déclencher la validation pour activer le bouton
     setTimeout(() => {
       prenomEl?.dispatchEvent(new Event('input'));
       nomEl?.dispatchEvent(new Event('input'));
@@ -200,9 +174,10 @@ export async function initDriverAuth() {
       const existing = await findDriverByPhone(currentPhone);
 
       if (existing) {
-        // Chauffeur connu → connexion directe
-        saveDriverSession(currentPhone, existing.prenom || 'Chauffeur', existing.nom, existing.photo);
-        window.location.replace('driver.html');
+        // Chauffeur connu → demander le mot de passe
+        document.getElementById('pw-phone-display').textContent = currentPhone;
+        goTo('screen-password');
+        setTimeout(() => document.getElementById('pw-input').focus(), 350);
       } else {
         // Nouveau chauffeur → écran profil
         goTo('screen-name');
@@ -215,16 +190,59 @@ export async function initDriverAuth() {
     }
   });
 
-  // ── ÉCRAN 2 — Profil (nouveau chauffeur) ────────────────────
-  const prenomInput    = document.getElementById('prenom-input');
-  const nomInput       = document.getElementById('nom-input');
-  const btnStart       = document.getElementById('btn-save-name');
-  const avatarPicker   = document.getElementById('avatar-picker');
-  const avatarFile     = document.getElementById('avatar-file');
-  const avatarCamera   = document.getElementById('avatar-camera');
-  const avatarPreview  = document.getElementById('avatar-preview');
-  const avatarBackdrop = document.getElementById('avatar-menu-backdrop');
-  let   selectedAvatar = null;
+  // ════════════════════════════════════════════════════════════
+  // ÉCRAN 1b — Mot de passe (connexion compte existant)
+  // ════════════════════════════════════════════════════════════
+  const pwInput  = document.getElementById('pw-input');
+  const btnLogin = document.getElementById('btn-login-pw');
+
+  document.getElementById('btn-change-phone')?.addEventListener('click', () => {
+    pwInput.value     = '';
+    btnLogin.disabled = true;
+    goTo('screen-phone');
+  });
+
+  pwInput?.addEventListener('input', () => {
+    btnLogin.disabled = pwInput.value.length < 4;
+  });
+
+  btnLogin?.addEventListener('click', async () => {
+    const password = pwInput.value;
+    if (password.length < 4) return;
+
+    setLoading(btnLogin, true, 'Connexion…');
+
+    try {
+      const profile = await verifyDriverPassword(currentPhone, password);
+
+      if (!profile) {
+        showAuthError('pw-error', 'Mot de passe incorrect. Réessayez.');
+        return;
+      }
+
+      saveDriverSession(profile.telephone, profile.prenom, profile.nom, profile.photo);
+      window.location.replace('driver.html');
+    } catch {
+      showAuthError('pw-error', 'Erreur de connexion. Réessayez.');
+    } finally {
+      setLoading(btnLogin, false, 'Se connecter');
+    }
+  });
+
+  // ════════════════════════════════════════════════════════════
+  // ÉCRAN 2 — Profil (nouveau chauffeur)
+  // ════════════════════════════════════════════════════════════
+  const prenomInput     = document.getElementById('prenom-input');
+  const nomInput        = document.getElementById('nom-input');
+  const signupPwInput   = document.getElementById('signup-pw-input');
+  const signupPwConfirm = document.getElementById('signup-pw-confirm');
+  const btnStart        = document.getElementById('btn-save-name');
+  const avatarPicker    = document.getElementById('avatar-picker');
+  const avatarFile      = document.getElementById('avatar-file');
+  const avatarCamera    = document.getElementById('avatar-camera');
+  const avatarPreview   = document.getElementById('avatar-preview');
+  const avatarBackdrop  = document.getElementById('avatar-menu-backdrop');
+  let   selectedAvatar  = null;
 
   function applyAvatarFile(file) {
     if (!file) return;
@@ -250,16 +268,43 @@ export async function initDriverAuth() {
   avatarFile.addEventListener('change',   () => applyAvatarFile(avatarFile.files[0]));
   avatarCamera.addEventListener('change', () => applyAvatarFile(avatarCamera.files[0]));
 
-  function checkNameReady() {
-    btnStart.disabled = prenomInput.value.trim().length < 2 || nomInput.value.trim().length < 2;
+  function checkSignupReady() {
+    const pw      = signupPwInput?.value   || '';
+    const confirm = signupPwConfirm?.value || '';
+
+    const namesOk = prenomInput.value.trim().length >= 2
+      && nomInput.value.trim().length >= 2;
+
+    const pwOk = pw.length >= 6 && pw === confirm;
+
+    btnStart.disabled = !(namesOk && pwOk);
+
+    if (signupPwConfirm && confirm.length > 0 && pw !== confirm) {
+      signupPwConfirm.style.borderColor = 'var(--red, #ef4444)';
+    } else if (signupPwConfirm) {
+      signupPwConfirm.style.borderColor = '';
+    }
   }
-  prenomInput.addEventListener('input', checkNameReady);
-  nomInput.addEventListener('input',    checkNameReady);
+
+  prenomInput.addEventListener('input',        checkSignupReady);
+  nomInput.addEventListener('input',           checkSignupReady);
+  signupPwInput?.addEventListener('input',     checkSignupReady);
+  signupPwConfirm?.addEventListener('input',   checkSignupReady);
 
   btnStart.addEventListener('click', async () => {
-    const prenom = prenomInput.value.trim();
-    const nom    = nomInput.value.trim();
+    const prenom   = prenomInput.value.trim();
+    const nom      = nomInput.value.trim();
+    const password = signupPwInput?.value || '';
+
     if (prenom.length < 2 || nom.length < 2) return;
+    if (password.length < 6) {
+      showAuthError('name-error', 'Le mot de passe doit faire au moins 6 caractères.');
+      return;
+    }
+    if (password !== (signupPwConfirm?.value || '')) {
+      showAuthError('name-error', 'Les mots de passe ne correspondent pas.');
+      return;
+    }
 
     setLoading(btnStart, true, 'Continuer');
     try {
@@ -267,6 +312,10 @@ export async function initDriverAuth() {
       if (selectedAvatar) {
         try { photoUrl = await uploadDriverAvatar(currentPhone, selectedAvatar); } catch (_) {}
       }
+
+      // Stocker le mot de passe temporairement pour driver-vehicle.html
+      sessionStorage.setItem('pnr_driver_pending_pw', password);
+
       saveDriverSession(currentPhone, prenom, nom, photoUrl);
       window.location.replace('driver-vehicle.html');
     } catch (err) {

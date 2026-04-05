@@ -63,12 +63,13 @@ export function watchActiveRide(passengerId, callback) {
       { event: '*', schema: 'public', table: 'rides', filter: `passenger_id=eq.${passengerId}` },
       async ({ new: ride }) => {
         if (!ride) return;
+        // Tenter d'enrichir avec les données du chauffeur, mais toujours appeler le callback
         const { data } = await supabase
           .from('rides')
           .select('*, drivers(*)')
           .eq('id', ride.id)
-          .single();
-        if (data) callback(data);
+          .maybeSingle();
+        callback(data ?? ride); // fallback sur les données realtime si le SELECT échoue
       }
     )
     .subscribe();

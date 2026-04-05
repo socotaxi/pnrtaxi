@@ -115,8 +115,7 @@ async function loadDashboard() {
 
 // ── Détection admin chauffeur ────────────────────────────────
 async function isAdminDriver() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return !!session;
+  return sessionStorage.getItem('pnr_admin') === '+242050787624';
 }
 
 function injectAdminNavDriver() {

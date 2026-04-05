@@ -214,6 +214,72 @@
       transition: color 0.15s;
     }
     .avatar-menu-cancel:active { color: var(--red, #ef4444); }
+
+    /* ── Bouton afficher/masquer mot de passe ── */
+    .pw-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .pw-wrapper input {
+      padding-right: 46px;
+    }
+    .btn-pw-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-pw-toggle:hover { color: var(--text-primary); }
+
+    /* ── Numéro récapitulatif sur l'écran mot de passe ── */
+    .phone-recap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-secondary, #f3f4f6);
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 12px;
+      padding: 11px 14px;
+      margin-bottom: 4px;
+      font-size: 0.93rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .phone-recap-change {
+      margin-left: auto;
+      font-size: 0.78rem;
+      color: #0891b2;
+      font-weight: 600;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Avertissement mémorisation mot de passe ── */
+    .pw-reminder {
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 10px;
+      padding: 10px 13px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #92400e;
+      line-height: 1.45;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -282,6 +348,52 @@
     </div>
   </div>
 
+  <!-- ── ÉCRAN 1b : Mot de passe (compte existant) ── -->
+  <div id="screen-password" class="auth-screen">
+    <div class="auth-content">
+
+      <div class="auth-hero" style="padding-top:24px">
+        <div class="auth-logo-icon">🔐</div>
+        <div class="auth-brand">PNR Taxi</div>
+        <div class="auth-tagline">Espace Chauffeur</div>
+      </div>
+
+      <div class="auth-card">
+        <h2 class="auth-title">Votre mot de passe</h2>
+        <p class="auth-subtitle">Entrez le mot de passe associé à ce numéro</p>
+
+        <div class="phone-recap">
+          <span>📱</span>
+          <span id="pw-phone-display"></span>
+          <button class="phone-recap-change" id="btn-change-phone">Modifier</button>
+        </div>
+
+        <div class="pw-wrapper">
+          <input
+            type="password"
+            id="pw-input"
+            class="name-input"
+            placeholder="Mot de passe"
+            maxlength="64"
+            autocomplete="current-password"
+          />
+          <button class="btn-pw-toggle" id="btn-pw-toggle-login" type="button" aria-label="Afficher/masquer">
+            <svg id="pw-eye-login" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="auth-error" id="pw-error"></div>
+
+        <button class="btn-auth" id="btn-login-pw" disabled>
+          Se connecter
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── ÉCRAN 2 : Profil (nouveau chauffeur) ── -->
   <div id="screen-name" class="auth-screen">
     <div class="auth-content">
@@ -318,6 +430,43 @@
           autocomplete="family-name"
           autocapitalize="words"
         />
+
+        <!-- Mot de passe -->
+        <div class="pw-wrapper">
+          <input
+            type="password"
+            id="signup-pw-input"
+            class="name-input"
+            placeholder="Créer un mot de passe"
+            maxlength="64"
+            autocomplete="new-password"
+          />
+          <button class="btn-pw-toggle" id="btn-pw-toggle-signup" type="button" aria-label="Afficher/masquer">
+            <svg id="pw-eye-signup" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="pw-wrapper">
+          <input
+            type="password"
+            id="signup-pw-confirm"
+            class="name-input"
+            placeholder="Confirmer le mot de passe"
+            maxlength="64"
+            autocomplete="new-password"
+          />
+          <button class="btn-pw-toggle" id="btn-pw-toggle-confirm" type="button" aria-label="Afficher/masquer">
+            <svg id="pw-eye-confirm" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="pw-reminder">
+          ⚠️ Attention de bien noter votre mot de passe !
+        </div>
 
         <!-- Photo de profil -->
         <div class="avatar-picker" id="avatar-picker">

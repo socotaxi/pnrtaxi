@@ -1,7 +1,6 @@
 // ============================================================
 //  auth.js — Système d'authentification PNR Taxi
 //  Flow téléphone : Numéro → lookup → mot de passe OU inscription
-//  Flow OAuth     : Google / Facebook → session
 // ============================================================
 
 import { supabase } from './supabase-config.js';
@@ -33,81 +32,6 @@ function saveSession(telephone, prenom, nom = null, email = null, auth_provider 
 export async function clearSession() {
   localStorage.removeItem(SESSION_KEY);
   await supabase.auth.signOut().catch(() => {});
-}
-
-// ── OAuth (Google / Facebook) ─────────────────────────────────
-export async function loginWithOAuth(provider) {
-  const redirectTo = window.location.href.split('?')[0].split('#')[0];
-  const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } });
-  if (error) throw error;
-}
-
-async function handleOAuthCallback() {
-  // Détecte un retour OAuth (PKCE : ?code=… | implicite : #access_token=…)
-  const url = new URL(window.location.href);
-  const isCallback = url.searchParams.has('code') || url.hash.includes('access_token');
-  if (!isCallback) return null;
-
-  // L'échange du code PKCE est asynchrone : on écoute onAuthStateChange
-  // ET on vérifie getSession() en parallèle pour ne rater aucun cas.
-  const session = await new Promise((resolve) => {
-    let done = false;
-    const finish = (s) => { if (!done) { done = true; resolve(s); } };
-    const timer = setTimeout(() => finish(null), 10000);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      if (event === 'SIGNED_IN' && s) {
-        clearTimeout(timer);
-        subscription.unsubscribe();
-        finish(s);
-      }
-    });
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        clearTimeout(timer);
-        subscription.unsubscribe();
-        finish(data.session);
-      }
-    });
-  });
-
-  // Nettoie l'URL (le code PKCE est à usage unique)
-  window.history.replaceState({}, '', window.location.pathname);
-
-  if (!session) return null;
-
-  const user = session.user;
-
-  const provider = user.app_metadata?.provider || 'email';
-  if (provider === 'email') {
-    localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-
-  const sessionMeta = user.user_metadata || {};
-  if (sessionMeta.role === 'admin') {
-    localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-
-  if (!user.email) return null;
-
-  const email    = user.email;
-  const meta     = user.user_metadata || {};
-  const fullName = meta.full_name || meta.name || '';
-  const prenom   = fullName.split(' ')[0] || email.split('@')[0] || 'Passager';
-  const nom      = fullName.split(' ').slice(1).join(' ') || '';
-
-  try {
-    await supabase.from('passengers').upsert(
-      { email, prenom, nom, auth_provider: provider, verified: true, telephone: null },
-      { onConflict: 'email' }
-    );
-  } catch (_) {}
-
-  saveSession(null, prenom, nom, email, provider);
-  return { prenom, nom, email, auth_provider: provider };
 }
 
 // ── RPCs téléphone ────────────────────────────────────────────
@@ -200,14 +124,7 @@ function bindTogglePassword(btnId, inputId, eyeId) {
 
 // ── Point d'entrée principal ──────────────────────────────────
 export async function initAuth(onComplete) {
-  // 1. Retour de redirection OAuth ?
-  const oauthSession = await handleOAuthCallback();
-  if (oauthSession) {
-    onComplete(oauthSession);
-    return;
-  }
-
-  // 2. Session locale existante ?
+  // Session locale existante ?
   const session = getSession();
   if (session) {
     onComplete(session);
@@ -215,17 +132,6 @@ export async function initAuth(onComplete) {
   }
 
   document.getElementById('auth-overlay').classList.add('visible');
-
-  // ── Boutons OAuth ────────────────────────────────────────────
-  document.getElementById('btn-oauth-google').addEventListener('click', async () => {
-    try { await loginWithOAuth('google'); }
-    catch { showAuthError('phone-error', 'Erreur Google. Réessayez.'); }
-  });
-
-  document.getElementById('btn-oauth-facebook').addEventListener('click', async () => {
-    try { await loginWithOAuth('facebook'); }
-    catch { showAuthError('phone-error', 'Erreur Facebook. Réessayez.'); }
-  });
 
   // Bascule afficher/masquer (tous les champs PW)
   bindTogglePassword('btn-pw-toggle-login',   'pw-input',          'pw-eye-login');

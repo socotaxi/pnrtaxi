@@ -985,6 +985,7 @@
       const permisPhotoUrl = await uploadPermisPhoto(session.telephone);
 
       // Enregistrement via RPC SECURITY DEFINER (contourne RLS INSERT)
+      const pendingPw = sessionStorage.getItem('pnr_driver_pending_pw') || '';
       const { error } = await supabase.rpc('register_driver', {
         p_telephone       : session.telephone,
         p_prenom          : session.prenom,
@@ -1003,10 +1004,12 @@
         p_permis_numero   : numero,
         p_permis_date     : date || '',
         p_permis_photo    : permisPhotoUrl || '',
+        p_password        : pendingPw,
       });
 
       if (error) throw error;
 
+      sessionStorage.removeItem('pnr_driver_pending_pw');
       window.location.replace('driver.html');
 
     } catch (err) {

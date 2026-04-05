@@ -744,12 +744,12 @@
     <p class="login-sub">Entrez le mot de passe pour accéder au tableau de bord</p>
 
     <div class="login-field">
-      <label for="admin-email">Email</label>
+      <label for="admin-phone">Numéro de téléphone</label>
       <input
-        type="email"
-        id="admin-email"
-        placeholder="admin@example.com"
-        autocomplete="username"
+        type="tel"
+        id="admin-phone"
+        placeholder="+242050787624"
+        autocomplete="tel"
       />
     </div>
 
@@ -954,12 +954,12 @@
     <select class="modal-select" id="grant-type">
       <option value="journee">Journée — 1 jour</option>
       <option value="semaine">Semaine — 7 jours</option>
-      <option value="gratuit">Gratuit — durée personnalisée</option>
+      <option value="gratuit">Gratuit — durée configurée</option>
     </select>
 
     <div id="grant-custom-days-wrap" style="display:none">
-      <label class="modal-label">Nombre de jours</label>
-      <input type="number" class="modal-input" id="grant-days" min="1" max="365" value="7" placeholder="Nombre de jours" />
+      <label class="modal-label">Nombre de jours (calculé depuis la config)</label>
+      <input type="number" class="modal-input" id="grant-days" min="1" max="365" value="30" placeholder="Nombre de jours" />
     </div>
 
     <div class="modal-actions">
