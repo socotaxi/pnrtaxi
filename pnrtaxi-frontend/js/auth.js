@@ -46,14 +46,19 @@ async function handleOAuthCallback() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return null;
 
+  const user = session.user;
+
+  // Ignorer les connexions email/password (admin ou autre) — seul OAuth est concerné ici
+  const provider = user.app_metadata?.provider || 'email';
+  if (provider === 'email') return null;
+
   // Ne pas traiter le compte admin comme un passager OAuth
-  const sessionMeta = session.user.user_metadata || {};
+  const sessionMeta = user.user_metadata || {};
   if (sessionMeta.role === 'admin') {
-    localStorage.removeItem(SESSION_KEY); // supprimer toute session passager stale
+    localStorage.removeItem(SESSION_KEY);
     return null;
   }
 
-  const user = session.user;
   if (!user.email) return null;
 
   const email    = user.email;
@@ -61,7 +66,6 @@ async function handleOAuthCallback() {
   const fullName = meta.full_name || meta.name || '';
   const prenom   = fullName.split(' ')[0] || email.split('@')[0] || 'Passager';
   const nom      = fullName.split(' ').slice(1).join(' ') || '';
-  const provider = user.app_metadata?.provider || 'oauth';
 
   try {
     await supabase.from('passengers').upsert(

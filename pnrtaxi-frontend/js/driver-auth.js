@@ -46,6 +46,11 @@ async function handleDriverOAuthCallback() {
   if (!session) return null;
 
   const user = session.user;
+
+  // Ignorer les connexions email/password — seul OAuth (Google/Facebook) est concerné ici
+  const appProvider = user.app_metadata?.provider || 'email';
+  if (appProvider === 'email') return null;
+
   if (!user.email) return null;
 
   const email    = user.email;
@@ -65,9 +70,11 @@ async function handleDriverOAuthCallback() {
     return { isNew: false };
   }
 
-  await supabase.from('drivers').insert({
-    email, prenom, auth_provider: provider, verified: true, telephone: null,
-  }).catch(() => {});
+  try {
+    await supabase.from('drivers').insert({
+      email, prenom, auth_provider: provider, verified: true, telephone: null,
+    });
+  } catch (_) {}
 
   saveDriverSession(null, prenom, null, null, email, provider);
   return { isNew: true };
