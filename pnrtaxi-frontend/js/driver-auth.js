@@ -142,12 +142,37 @@ export async function initDriverAuth() {
     return;
   }
 
-  let currentPhone = '';
+  // 3. Prefill depuis le formulaire passager ?
+  const params  = new URLSearchParams(location.search);
+  const prefill = params.get('prefill') === '1'
+    ? (() => { try { return JSON.parse(sessionStorage.getItem('pnr_driver_prefill') || ''); } catch { return null; } })()
+    : null;
+
+  if (prefill) {
+    sessionStorage.removeItem('pnr_driver_prefill');
+  }
+
+  let currentPhone = prefill?.telephone || '';
 
   // ── ÉCRAN 1 — Téléphone ─────────────────────────────────────
   const btnSend    = document.getElementById('btn-send-otp');
   const phoneInput = document.getElementById('auth-phone-input');
   const prefixSel  = document.getElementById('phone-prefix-select');
+
+  // Si prefill : aller directement au formulaire profil
+  if (prefill) {
+    goTo('screen-name');
+    const prenomEl = document.getElementById('prenom-input');
+    const nomEl    = document.getElementById('nom-input');
+    if (prenomEl) prenomEl.value = prefill.prenom || '';
+    if (nomEl)    nomEl.value    = prefill.nom    || '';
+    // Déclencher la validation pour activer le bouton
+    setTimeout(() => {
+      prenomEl?.dispatchEvent(new Event('input'));
+      nomEl?.dispatchEvent(new Event('input'));
+      prenomEl?.focus();
+    }, 350);
+  }
 
   phoneInput.addEventListener('input', () => {
     phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 9);

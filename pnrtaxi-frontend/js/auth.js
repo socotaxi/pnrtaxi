@@ -216,6 +216,28 @@ export async function initAuth(onComplete) {
   const villeInput    = document.getElementById('ville-input');
   const quartierInput = document.getElementById('quartier-input');
   const btnStart      = document.getElementById('btn-save-name');
+
+  // ── Sélecteur de rôle ──────────────────────────
+  let selectedRole = 'passenger';
+  const rolePassenger = document.getElementById('role-passenger');
+  const roleDriver    = document.getElementById('role-driver');
+
+  if (rolePassenger && roleDriver) {
+    rolePassenger.addEventListener('click', () => {
+      selectedRole = 'passenger';
+      rolePassenger.classList.add('active');
+      roleDriver.classList.remove('active');
+      btnStart.textContent = 'Commencer 🚖';
+    });
+    roleDriver.addEventListener('click', () => {
+      selectedRole = 'driver';
+      roleDriver.classList.add('active');
+      rolePassenger.classList.remove('active');
+      btnStart.textContent = 'Continuer →';
+    });
+  }
+
+  // ── Avatar (présent sur login.html, absent sur passenger.html) ─
   const avatarPicker   = document.getElementById('avatar-picker');
   const avatarFile     = document.getElementById('avatar-file');
   const avatarCamera   = document.getElementById('avatar-camera');
@@ -223,55 +245,68 @@ export async function initAuth(onComplete) {
   const avatarBackdrop = document.getElementById('avatar-menu-backdrop');
   let   selectedAvatar = null;
 
-  function applyAvatarFile(file) {
-    if (!file) return;
-    avatarBackdrop.classList.remove('open');
-    selectedAvatar = file;
-    avatarPreview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="aperçu" />`;
-    avatarPicker.classList.add('has-photo');
-  }
+  if (avatarPicker && avatarBackdrop) {
+    function applyAvatarFile(file) {
+      if (!file) return;
+      avatarBackdrop.classList.remove('open');
+      selectedAvatar = file;
+      avatarPreview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="aperçu" />`;
+      avatarPicker.classList.add('has-photo');
+    }
 
-  avatarPicker.addEventListener('click', () => avatarBackdrop.classList.add('open'));
-  document.getElementById('btn-pick-gallery').addEventListener('click', () => {
-    avatarBackdrop.classList.remove('open'); avatarFile.click();
-  });
-  document.getElementById('btn-pick-camera').addEventListener('click', () => {
-    avatarBackdrop.classList.remove('open'); avatarCamera.click();
-  });
-  document.getElementById('btn-pick-cancel').addEventListener('click', () => {
-    avatarBackdrop.classList.remove('open');
-  });
-  avatarBackdrop.addEventListener('click', (e) => {
-    if (e.target === avatarBackdrop) avatarBackdrop.classList.remove('open');
-  });
-  avatarFile.addEventListener('change',   () => applyAvatarFile(avatarFile.files[0]));
-  avatarCamera.addEventListener('change', () => applyAvatarFile(avatarCamera.files[0]));
+    avatarPicker.addEventListener('click', () => avatarBackdrop.classList.add('open'));
+    document.getElementById('btn-pick-gallery').addEventListener('click', () => {
+      avatarBackdrop.classList.remove('open'); avatarFile.click();
+    });
+    document.getElementById('btn-pick-camera').addEventListener('click', () => {
+      avatarBackdrop.classList.remove('open'); avatarCamera.click();
+    });
+    document.getElementById('btn-pick-cancel').addEventListener('click', () => {
+      avatarBackdrop.classList.remove('open');
+    });
+    avatarBackdrop.addEventListener('click', (e) => {
+      if (e.target === avatarBackdrop) avatarBackdrop.classList.remove('open');
+    });
+    avatarFile.addEventListener('change',   () => applyAvatarFile(avatarFile.files[0]));
+    avatarCamera.addEventListener('change', () => applyAvatarFile(avatarCamera.files[0]));
+  }
 
   function checkNameReady() {
     btnStart.disabled = nomInput.value.trim().length < 2
       || prenomInput.value.trim().length < 2
-      || villeInput.value.trim().length < 2
-      || quartierInput.value.trim().length < 2;
+      || (villeInput    ? villeInput.value.trim().length < 2    : false)
+      || (quartierInput ? quartierInput.value.trim().length < 2 : false);
   }
 
-  nomInput.addEventListener('input',      checkNameReady);
-  prenomInput.addEventListener('input',   checkNameReady);
-  villeInput.addEventListener('input',    checkNameReady);
-  quartierInput.addEventListener('input', checkNameReady);
+  nomInput.addEventListener('input',    checkNameReady);
+  prenomInput.addEventListener('input', checkNameReady);
+  villeInput?.addEventListener('input',    checkNameReady);
+  quartierInput?.addEventListener('input', checkNameReady);
 
   btnStart.addEventListener('click', async () => {
     const nom      = nomInput.value.trim();
     const prenom   = prenomInput.value.trim();
-    const ville    = villeInput.value.trim();
-    const quartier = quartierInput.value.trim();
-    if (nom.length < 2 || prenom.length < 2 || ville.length < 2 || quartier.length < 2) return;
+    const ville    = villeInput?.value.trim()    || '';
+    const quartier = quartierInput?.value.trim() || '';
+    if (nom.length < 2 || prenom.length < 2) return;
 
+    // ── Rôle Chauffeur → redirection avec prefill ──
+    if (selectedRole === 'driver') {
+      sessionStorage.setItem('pnr_driver_prefill', JSON.stringify({
+        telephone: currentPhone,
+        prenom,
+        nom,
+      }));
+      window.location.replace('driver-auth.html?prefill=1');
+      return;
+    }
+
+    // ── Rôle Passager → inscription normale ────────
     setLoading(btnStart, true, 'Inscription…');
 
     try {
       await registerPassenger(currentPhone, prenom, nom, quartier, ville);
 
-      // Avatar en option
       let avatarUrl = null;
       if (selectedAvatar) {
         try { avatarUrl = await uploadAvatar(currentPhone, selectedAvatar); } catch (_) {}
