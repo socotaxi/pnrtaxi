@@ -979,40 +979,31 @@
     btnSaveAll.textContent = '…';
 
     try {
-      // Si une nouvelle photo de profil est choisie ici, on la re-uploade
-      // sinon on réutilise celle déjà uploadée depuis la page précédente
+      // Upload photos (Storage ouvert aux anon via RLS)
       const newPhotoUrl    = await uploadAvatar(session.telephone);
       const photoUrl       = newPhotoUrl || session.photo || null;
       const permisPhotoUrl = await uploadPermisPhoto(session.telephone);
 
-      // INSERT unique avec toutes les données — premier et seul enregistrement en base
-      const { error } = await supabase
-        .from('drivers')
-        .insert({
-          // Identité
-          id                   : session.telephone,
-          telephone            : session.telephone,
-          prenom               : session.prenom,
-          nom                  : session.nom,
-          verified             : true,
-          // Véhicule
-          type_vehicule        : selectedType,
-          marque,
-          modele,
-          couleur,
-          immatriculation      : plaque,
-          etat_vehicule        : selectedCondition,
-          cylindree            : cyl,
-          // Permis
-          permis_pays          : pays,
-          permis_nom           : nom,
-          permis_prenom        : prenom,
-          permis_numero        : numero,
-          permis_date_emission : date,
-          // Photos
-          ...(photoUrl       ? { photo        : photoUrl       } : {}),
-          ...(permisPhotoUrl ? { permis_photo : permisPhotoUrl } : {}),
-        });
+      // Enregistrement via RPC SECURITY DEFINER (contourne RLS INSERT)
+      const { error } = await supabase.rpc('register_driver', {
+        p_telephone       : session.telephone,
+        p_prenom          : session.prenom,
+        p_nom             : session.nom,
+        p_photo           : photoUrl       || '',
+        p_type_vehicule   : selectedType,
+        p_marque          : marque,
+        p_modele          : modele,
+        p_couleur         : couleur,
+        p_immatriculation : plaque,
+        p_etat_vehicule   : selectedCondition,
+        p_cylindree       : cyl || '',
+        p_permis_pays     : pays,
+        p_permis_nom      : nom,
+        p_permis_prenom   : prenom,
+        p_permis_numero   : numero,
+        p_permis_date     : date || '',
+        p_permis_photo    : permisPhotoUrl || '',
+      });
 
       if (error) throw error;
 
