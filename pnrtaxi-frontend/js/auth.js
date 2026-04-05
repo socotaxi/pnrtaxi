@@ -46,6 +46,13 @@ async function handleOAuthCallback() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return null;
 
+  // Ne pas traiter le compte admin comme un passager OAuth
+  const sessionMeta = session.user.user_metadata || {};
+  if (sessionMeta.role === 'admin') {
+    localStorage.removeItem(SESSION_KEY); // supprimer toute session passager stale
+    return null;
+  }
+
   const user = session.user;
   if (!user.email) return null;
 

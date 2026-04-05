@@ -934,7 +934,7 @@ function startApp(s) {
 
   // ── Courses en temps réel ────────────────────────────────
   const passengerId = session.telephone || session.email;
-  if (passengerId) {
+  if (passengerId && !isAdminSession(session)) {
     watchActiveRide(passengerId, updateRideBanner);
   }
 }
