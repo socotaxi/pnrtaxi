@@ -49,7 +49,10 @@ async function handleDriverOAuthCallback() {
 
   // Ignorer les connexions email/password — seul OAuth (Google/Facebook) est concerné ici
   const appProvider = user.app_metadata?.provider || 'email';
-  if (appProvider === 'email') return null;
+  if (appProvider === 'email') {
+    localStorage.removeItem(SESSION_KEY); // purger toute session chauffeur stale liée à ce compte
+    return null;
+  }
 
   if (!user.email) return null;
 

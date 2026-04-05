@@ -50,7 +50,10 @@ async function handleOAuthCallback() {
 
   // Ignorer les connexions email/password (admin ou autre) — seul OAuth est concerné ici
   const provider = user.app_metadata?.provider || 'email';
-  if (provider === 'email') return null;
+  if (provider === 'email') {
+    localStorage.removeItem(SESSION_KEY); // purger toute session passager stale liée à ce compte
+    return null;
+  }
 
   // Ne pas traiter le compte admin comme un passager OAuth
   const sessionMeta = user.user_metadata || {};
