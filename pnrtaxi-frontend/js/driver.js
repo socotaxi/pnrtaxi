@@ -632,44 +632,66 @@ async function onRideEvent(ride) {
   }
 
   if (isNew && isPending) {
-    playRequestBeep();
-    vibrateRequest();
+    startAlarm(ride.id);
+  }
+
+  // Arrêter l'alarme dès que la course n'est plus en attente
+  if (!isPending) {
+    stopAlarm(ride.id);
   }
 }
 
-function playRequestBeep() {
+// ── Alarme répétée (bip + vibration) jusqu'à acceptation/refus ──
+const alarmTimers = new Map(); // rideId → intervalId
+
+function beep() {
   try {
     const AudioCtx = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
     const ctx = new AudioCtx();
-
-    // Deux bips courts successifs
-    [0, 0.25].forEach(offset => {
+    [0, 0.28].forEach(offset => {
       const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
-
       osc.connect(gain);
       gain.connect(ctx.destination);
-
-      osc.type      = 'sine';
-      osc.frequency.value = 880; // La5 — ton clair et perçant
+      osc.type            = 'sine';
+      osc.frequency.value = 880;
       gain.gain.setValueAtTime(0.8, ctx.currentTime + offset);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.18);
-
       osc.start(ctx.currentTime + offset);
       osc.stop(ctx.currentTime + offset + 0.18);
     });
-
-    // Fermer le contexte après la fin
     setTimeout(() => ctx.close(), 700);
   } catch (err) {
     console.warn('Audio non disponible:', err);
   }
 }
 
-function vibrateRequest() {
-  if (!navigator.vibrate) return;
-  // Deux pulses : 200ms ON, 100ms OFF, 200ms ON
-  navigator.vibrate([200, 100, 200]);
+function vibrate() {
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+}
+
+function startAlarm(rideId) {
+  if (alarmTimers.has(rideId)) return; // déjà en cours
+  beep();
+  vibrate();
+  const id = setInterval(() => {
+    // Vérifier que la course est encore en attente avant de biper
+    const ride = ridesMap.get(rideId);
+    if (!ride || ride.status !== 'pending') {
+      stopAlarm(rideId);
+      return;
+    }
+    beep();
+    vibrate();
+  }, 4000); // bip toutes les 4 secondes
+  alarmTimers.set(rideId, id);
+}
+
+function stopAlarm(rideId) {
+  if (alarmTimers.has(rideId)) {
+    clearInterval(alarmTimers.get(rideId));
+    alarmTimers.delete(rideId);
+  }
 }
 
 // ── Course en cours (pending / accepted) ─────────────────────
@@ -934,6 +956,7 @@ async function clearHistory() {
 }
 
 async function handleRideAction(rideId, status) {
+  stopAlarm(rideId); // arrêter l'alarme immédiatement au clic
   const card = document.querySelector(`[data-ride-id="${rideId}"]`);
   if (card) card.querySelectorAll('button').forEach(b => { b.disabled = true; });
   try {
