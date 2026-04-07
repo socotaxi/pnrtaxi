@@ -709,9 +709,19 @@ function renderRideButton(driver) {
   });
 }
 
-// ── Bouton WhatsApp (verrouillé tant que la course n'est pas acceptée) ──
-const WA_SVG = `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-  <path d="M16.002 3C9.375 3 4 8.373 4 15c0 2.385.68 4.61 1.857 6.497L4 29l7.742-1.83A12.94 12.94 0 0016.002 28c6.626 0 12-5.373 12-12S22.628 3 16.002 3zm0 21.6a10.55 10.55 0 01-5.37-1.47l-.385-.229-3.986.942.988-3.875-.25-.4A10.56 10.56 0 015.4 15c0-5.848 4.755-10.6 10.6-10.6S26.6 9.152 26.6 15 21.848 24.6 16.002 24.6zm5.814-7.946c-.318-.16-1.887-.93-2.18-1.037-.294-.107-.508-.16-.721.16-.213.32-.826 1.037-.012 1.25.293.106 1.032.373 1.967.774.938.4 1.574 1.009 1.95 1.25.376.24.08.534-.054.72-.133.186-.373.32-.72.534-.347.213-.508.373-.828.188-.32-.186-1.24-.64-2.36-1.44-.89-.64-1.494-1.44-1.66-1.68-.168-.24-.018-.373.125-.48.128-.093.32-.24.48-.373.16-.133.213-.24.32-.4.107-.16.053-.32-.027-.453-.08-.133-.72-1.733-.986-2.374-.266-.64-.533-.56-.72-.56h-.613c-.213 0-.56.08-.853.373-.294.293-1.12 1.093-1.12 2.668 0 1.573 1.147 3.093 1.307 3.307.16.213 2.24 3.44 5.44 4.826.76.333 1.36.533 1.827.68.76.24 1.454.207 2 .127.614-.094 1.887-.773 2.147-1.52.267-.746.267-1.386.187-1.52-.08-.133-.294-.213-.614-.373z"/>
+// ── Boutons Appel direct + WhatsApp ──────────────────────────
+const PHONE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+  width="20" height="20">
+  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07
+    A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.68A2 2 0 012 1h3
+    a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91
+    8.91A16 16 0 0015.1 17.1l1.27-1.27a2 2 0 012.11-.45
+    c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+</svg>`;
+
+const WA_SVG = `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+  <path fill="currentColor" d="M16.002 3C9.375 3 4 8.373 4 15c0 2.385.68 4.61 1.857 6.497L4 29l7.742-1.83A12.94 12.94 0 0016.002 28c6.626 0 12-5.373 12-12S22.628 3 16.002 3zm0 21.6a10.55 10.55 0 01-5.37-1.47l-.385-.229-3.986.942.988-3.875-.25-.4A10.56 10.56 0 015.4 15c0-5.848 4.755-10.6 10.6-10.6S26.6 9.152 26.6 15 21.848 24.6 16.002 24.6zm5.814-7.946c-.318-.16-1.887-.93-2.18-1.037-.294-.107-.508-.16-.721.16-.213.32-.826 1.037-.012 1.25.293.106 1.032.373 1.967.774.938.4 1.574 1.009 1.95 1.25.376.24.08.534-.054.72-.133.186-.373.32-.72.534-.347.213-.508.373-.828.188-.32-.186-1.24-.64-2.36-1.44-.89-.64-1.494-1.44-1.66-1.68-.168-.24-.018-.373.125-.48.128-.093.32-.24.48-.373.16-.133.213-.24.32-.4.107-.16.053-.32-.027-.453-.08-.133-.72-1.733-.986-2.374-.266-.64-.533-.56-.72-.56h-.613c-.213 0-.56.08-.853.373-.294.293-1.12 1.093-1.12 2.668 0 1.573 1.147 3.093 1.307 3.307.16.213 2.24 3.44 5.44 4.826.76.333 1.36.533 1.827.68.76.24 1.454.207 2 .127.614-.094 1.887-.773 2.147-1.52.267-.746.267-1.386.187-1.52-.08-.133-.294-.213-.614-.373z"/>
 </svg>`;
 
 function renderWhatsAppCta(driver) {
@@ -720,11 +730,10 @@ function renderWhatsAppCta(driver) {
 
   if (!driver.telephone) { ctaEl.innerHTML = ''; return; }
 
-  const tel      = driver.telephone.replace(/\D/g, '');
+  const tel      = driver.telephone.replace(/\s/g, '');
+  const waNum    = tel.replace(/\D/g, '');
   const accepted = activeRide?.driver_id === driver.id && activeRide?.status === 'accepted';
 
-  // Si la course est acceptée avec CE chauffeur : afficher WhatsApp même s'il est marqué indisponible
-  // (il est indisponible exprès pendant la fenêtre de contact)
   if (!accepted && !isDriverConnected(driver)) {
     const msg = driver.disponible
       ? '🔌 Ce chauffeur est hors ligne'
@@ -740,18 +749,21 @@ function renderWhatsAppCta(driver) {
 
   if (accepted) {
     ctaEl.innerHTML = `
-      <a class="btn-whatsapp" href="https://wa.me/${tel}" target="_blank" rel="noopener noreferrer">
-        ${WA_SVG}
-        📞 Appeler via WhatsApp
-      </a>`;
+      <div class="cta-call-row">
+        <a class="btn-call-direct" href="tel:${tel}">
+          ${PHONE_SVG} Appel direct
+        </a>
+        <a class="btn-whatsapp" href="https://wa.me/${waNum}" target="_blank" rel="noopener noreferrer">
+          ${WA_SVG} WhatsApp
+        </a>
+      </div>`;
   } else {
     ctaEl.innerHTML = `
-      <button class="btn-whatsapp" disabled
-        title="Disponible après acceptation de la course"
-        style="opacity:0.45;cursor:not-allowed;pointer-events:none;">
-        ${WA_SVG}
-        🔒 Appel disponible après acceptation
-      </button>`;
+      <div class="cta-call-row">
+        <button class="btn-call-direct" disabled>${PHONE_SVG} Appel direct</button>
+        <button class="btn-whatsapp"    disabled>${WA_SVG} WhatsApp</button>
+      </div>
+      <p class="cta-lock-hint">🔒 Disponible après acceptation de la course</p>`;
   }
 }
 

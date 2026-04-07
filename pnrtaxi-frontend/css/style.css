@@ -551,42 +551,77 @@ html, body {
   border: 1px solid var(--brand-200);
 }
 
+/* ── Rangée des boutons d'appel ── */
+.cta-call-row {
+  display: flex;
+  gap: 10px;
+}
+
+.cta-lock-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+/* ── Bouton Appel direct ── */
+.btn-call-direct {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  padding: 14px 10px;
+  border-radius: 14px;
+  border: none;
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--transition), transform 0.12s;
+  box-shadow: 0 4px 16px rgba(79,70,229,0.3);
+}
+
+.btn-call-direct:hover  { background: var(--brand-700); }
+.btn-call-direct:active { transform: scale(0.97); box-shadow: none; }
+.btn-call-direct:disabled,
+.btn-call-direct[disabled] {
+  background: #9ca3af;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* ── Bouton WhatsApp ── */
 .btn-whatsapp {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 17px;
-  background: var(--green);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
+  gap: 8px;
+  flex: 1;
+  padding: 14px 10px;
+  border-radius: 14px;
   border: none;
-  border-radius: 16px;
-  cursor: pointer;
   text-decoration: none;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--green);
   transition: background var(--transition), transform 0.12s, box-shadow 0.2s;
   box-shadow: 0 4px 20px rgba(16,185,129,0.3);
-  letter-spacing: 0.2px;
 }
 
 .btn-whatsapp:hover  { background: var(--green-dark); }
-.btn-whatsapp:active { background: var(--green-dark); transform: scale(0.98); box-shadow: none; }
-
-.btn-whatsapp svg {
-  width: 22px;
-  height: 22px;
-  fill: white;
-}
+.btn-whatsapp:active { transform: scale(0.97); box-shadow: none; }
 
 .btn-whatsapp:disabled,
 .btn-whatsapp[disabled] {
   background: #9ca3af;
   box-shadow: none;
   cursor: not-allowed;
-  pointer-events: none;
   opacity: 0.5;
 }
 
