@@ -5,6 +5,17 @@
 import { supabase } from './supabase-config.js';
 import { updateRideStatus, watchIncomingRides, loadDriverRideHistory } from './rides.js';
 import { initPaymentModal, checkDriverAccess } from './payment.js';
+import { haversineDistance, formatDistance } from './haversine.js';
+
+const CONTACT_WINDOW_S = 30; // secondes d'indisponibilité après acceptation
+
+// ── Sécurité : sanitize URL pour attributs src ────────────────
+function sanitizeUrl(url) {
+  if (!url) return '';
+  const s = String(url).trim();
+  if (s.startsWith('https://') || s.startsWith('blob:')) return s;
+  return '';
+}
 
 // ── État global ──────────────────────────────────────────────
 let currentDriver   = null;
@@ -17,6 +28,22 @@ let lastLat         = null;
 let lastLng         = null;
 let passengerMarker = null;
 let presenceChannel = null;
+let configChannel   = null;
+
+// Cache des profils passagers (passenger_id → { prenom, nom, avatar_url })
+const passengersCache = new Map();
+
+async function fetchPassengerProfile(passengerId) {
+  if (passengersCache.has(passengerId)) return passengersCache.get(passengerId);
+  const { data } = await supabase
+    .from('passengers')
+    .select('prenom, nom, avatar_url')
+    .or(`telephone.eq.${passengerId},email.eq.${passengerId}`)
+    .maybeSingle();
+  const profile = data || {};
+  passengersCache.set(passengerId, profile);
+  return profile;
+}
 
 // ── DOM refs ─────────────────────────────────────────────────
 const loginScreen     = document.getElementById('login-screen');
@@ -93,29 +120,26 @@ async function loadDashboard() {
   joinPresence();
 
   // Vérification de l'accès et initialisation du modal paiement
-  const { openModal } = await initPaymentModal(currentPhone, supabase, onAccessGranted);
-  window._openPayModal = openModal;
+  const { openModal, cleanup: cleanupPayment } = await initPaymentModal(currentPhone, supabase, onAccessGranted);
+  window._openPayModal   = openModal;
+  window._cleanupPayment = cleanupPayment;
   await refreshAccessBadge();
 
   // Mise à jour immédiate si la config change côté admin (ex: période gratuite)
-  // Nécessite que app_config soit dans supabase_realtime (voir payment.sql §3b)
-  supabase
+  // Channel stocké dans une variable globale pour être fermé au logout.
+  configChannel = supabase
     .channel('config-changes')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_config' }, () => {
       refreshAccessBadge();
     })
     .subscribe();
 
-  // Polling de secours : re-vérifie l'accès toutes les 30 s
-  // (couvre le cas où le realtime ne serait pas activé pour app_config)
-  setInterval(() => refreshAccessBadge(), 30_000);
-
-  if (await isAdminDriver()) injectAdminNavDriver();
+  if (isAdminDriver()) injectAdminNavDriver();
 }
 
 // ── Détection admin chauffeur ────────────────────────────────
-async function isAdminDriver() {
-  return sessionStorage.getItem('pnr_admin') === '+242050787624';
+function isAdminDriver() {
+  return sessionStorage.getItem('pnr_admin') === 'authenticated';
 }
 
 function injectAdminNavDriver() {
@@ -329,17 +353,33 @@ function stopGPS() {
   }
 }
 
-// ── Présence temps réel ───────────────────────────────────────
+// ── Présence temps réel avec reconnexion auto ─────────────────
+var _presenceReconnectTimer = null;
+
 function joinPresence() {
+  if (_presenceReconnectTimer) {
+    clearTimeout(_presenceReconnectTimer);
+    _presenceReconnectTimer = null;
+  }
+
   presenceChannel = supabase.channel('drivers-online');
   presenceChannel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       await presenceChannel.track({ driver_id: currentPhone });
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      console.warn('[Presence] Connexion perdue, reconnexion dans 5s…');
+      await supabase.removeChannel(presenceChannel);
+      presenceChannel = null;
+      _presenceReconnectTimer = setTimeout(joinPresence, 5000);
     }
   });
 }
 
 async function leavePresence() {
+  if (_presenceReconnectTimer) {
+    clearTimeout(_presenceReconnectTimer);
+    _presenceReconnectTimer = null;
+  }
   if (presenceChannel) {
     await presenceChannel.untrack();
     await supabase.removeChannel(presenceChannel);
@@ -351,7 +391,7 @@ async function leavePresence() {
 function setDriverAvatarEl(el, driver) {
   if (!el) return;
   if (driver.photo) {
-    el.innerHTML = `<img src="${driver.photo}" alt="${driver.prenom || ''}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
+    el.innerHTML = `<img src="${sanitizeUrl(driver.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
   } else {
     el.textContent = ((driver.prenom || driver.nom || '?').charAt(0)).toUpperCase();
   }
@@ -392,7 +432,7 @@ function showProfile() {
   // Avatar
   const avatarEl = document.getElementById('driver-prof-avatar');
   if (currentDriver.photo) {
-    avatarEl.innerHTML = `<img src="${currentDriver.photo}" alt="${fullName}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
+    avatarEl.innerHTML = `<img src="${sanitizeUrl(currentDriver.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
   } else {
     avatarEl.textContent = initiale;
   }
@@ -427,20 +467,20 @@ function showProfile() {
     if (!file) return;
 
     const preview = URL.createObjectURL(file);
-    avatarEl.innerHTML = `<img src="${preview}" alt="Aperçu" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
+    avatarEl.innerHTML = `<img src="${sanitizeUrl(preview)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
 
     try {
       const url = await uploadDriverPhoto(file);
       currentDriver.photo = url;
-      avatarEl.innerHTML = `<img src="${url}" alt="${fullName}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
+      avatarEl.innerHTML = `<img src="${sanitizeUrl(url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
       updateNavAvatars();
       // Mettre à jour la photo dans le dashboard
       const dashPhoto = document.getElementById('dash-photo');
-      if (dashPhoto) dashPhoto.src = url;
+      if (dashPhoto) dashPhoto.src = sanitizeUrl(url);
     } catch (err) {
       console.error('Erreur upload photo:', err);
       if (currentDriver.photo) {
-        avatarEl.innerHTML = `<img src="${currentDriver.photo}" alt="${fullName}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
+        avatarEl.innerHTML = `<img src="${sanitizeUrl(currentDriver.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
       } else {
         avatarEl.textContent = initiale;
       }
@@ -560,9 +600,12 @@ function removePassengerMarker() {
   }
 }
 
-function onRideEvent(ride) {
+async function onRideEvent(ride) {
   const isNew     = !ridesMap.has(ride.id);
   const isPending = ride.status === 'pending';
+
+  // Pré-charger le profil passager pour l'afficher dans la carte
+  if (isPending) await fetchPassengerProfile(ride.passenger_id);
 
   ridesMap.set(ride.id, ride);
   renderActiveRide();
@@ -643,9 +686,24 @@ function renderActiveRide() {
   const statusIcon  = { pending: '⏳', accepted: '✅' };
 
   container.innerHTML = active.map(ride => {
-    const initiale = (ride.passenger_id || '?').charAt(0).toUpperCase();
+    const profile  = passengersCache.get(ride.passenger_id) || {};
+    const fullName = [profile.prenom, profile.nom].filter(Boolean).join(' ') || ride.passenger_id;
+    const initiale = (profile.prenom || ride.passenger_id || '?').charAt(0).toUpperCase();
     const timeStr  = new Date(ride.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const label    = statusLabel[ride.status] || ride.status;
+
+    // Avatar : photo si disponible, sinon initiale
+    const avatarHtml = profile.avatar_url
+      ? `<img src="${sanitizeUrl(profile.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.parentElement.textContent='${initiale}'" />`
+      : initiale;
+
+    // Distance chauffeur ↔ passager
+    let distanceHtml = '';
+    if (lastLat !== null && lastLng !== null && ride.passenger_lat && ride.passenger_lng) {
+      const km  = haversineDistance(lastLat, lastLng, ride.passenger_lat, ride.passenger_lng);
+      const str = formatDistance(km);
+      distanceHtml = `<span class="ride-card-meta-dot"></span><span>📍 ${str}</span>`;
+    }
 
     const actions = ride.status === 'pending' ? `
       <div class="ride-card-divider"></div>
@@ -660,22 +718,39 @@ function renderActiveRide() {
         </button>
       </div>` : '';
 
+    // Countdown côté chauffeur pour les courses acceptées
+    let countdownHtml = '';
+    if (ride.status === 'accepted' && driverCountdownEndAt) {
+      const remaining = Math.max(0, Math.ceil((driverCountdownEndAt - Date.now()) / 1000));
+      const urgent    = remaining <= 5;
+      countdownHtml = `
+        <div class="ride-card-countdown${urgent ? ' urgent' : ''}" id="countdown-${ride.id}">
+          <span class="rcd-number" id="rcd-num-${ride.id}">${remaining > 0 ? remaining : '✅'}</span>
+          <div class="rcd-right">
+            <span class="rcd-label">${remaining > 0 ? 'secondes' : 'Terminé'}</span>
+            <span class="rcd-desc">${remaining > 0 ? 'Le passager peut vous appeler' : 'Fenêtre de contact écoulée'}</span>
+          </div>
+        </div>`;
+    }
+
     return `
       <div class="ride-card ${ride.status}" data-ride-id="${ride.id}">
         <div class="ride-card-top"></div>
         <div class="ride-card-body">
           <div class="ride-card-row">
-            <div class="ride-card-avatar">${initiale}</div>
+            <div class="ride-card-avatar">${avatarHtml}</div>
             <div class="ride-card-info">
-              <div class="ride-card-passenger">${ride.passenger_id}</div>
+              <div class="ride-card-passenger">${fullName}</div>
               <div class="ride-card-meta">
                 <span>${timeStr}</span>
                 <span class="ride-card-meta-dot"></span>
                 <span>${statusIcon[ride.status] || ''} ${label}</span>
+                ${distanceHtml}
               </div>
             </div>
             <span class="ride-card-status ${ride.status}">${label}</span>
           </div>
+          ${countdownHtml}
           ${actions}
         </div>
       </div>`;
@@ -708,15 +783,23 @@ function renderHistory() {
 
   if (countEl) countEl.textContent = history.length > 0 ? String(history.length) : '';
 
+  const clearBtn     = document.getElementById('history-clear-btn');
+  const clearConfirm = document.getElementById('history-clear-confirm');
+
   if (history.length === 0) {
     listEl.innerHTML = `
       <div class="no-rides-msg">
         <div class="no-rides-icon">📋</div>
         <p class="no-rides-text">Aucune course dans l'historique</p>
       </div>`;
-    if (pagEl) pagEl.style.display = 'none';
+    if (pagEl)        pagEl.style.display        = 'none';
+    if (clearBtn)     clearBtn.style.display     = 'none';
+    if (clearConfirm) clearConfirm.style.display = 'none';
     return;
   }
+
+  if (clearBtn)     clearBtn.style.display     = '';
+  if (clearConfirm) clearConfirm.style.display = 'none';
 
   const page        = history.slice(historyPage * HISTORY_PER_PAGE, (historyPage + 1) * HISTORY_PER_PAGE);
   const statusLabel = { accepted: 'Acceptée', rejected: 'Refusée', cancelled: 'Annulée' };
@@ -756,10 +839,14 @@ function renderHistory() {
   }
 }
 
-// ── Init section historique (toggle + pagination) ─────────────
+// ── Init section historique (toggle + pagination + effacement) ──
 function initHistorySection() {
-  const toggle = document.getElementById('history-toggle');
-  const body   = document.getElementById('history-body');
+  const toggle       = document.getElementById('history-toggle');
+  const body         = document.getElementById('history-body');
+  const clearBtn     = document.getElementById('history-clear-btn');
+  const clearConfirm = document.getElementById('history-clear-confirm');
+  const clearYes     = document.getElementById('history-clear-yes');
+  const clearNo      = document.getElementById('history-clear-no');
   if (!toggle || !body) return;
 
   toggle.addEventListener('click', () => {
@@ -775,6 +862,51 @@ function initHistorySection() {
     historyPage++;
     renderHistory();
   });
+
+  // Afficher la confirmation inline
+  clearBtn?.addEventListener('click', () => {
+    clearConfirm.style.display = '';
+    clearBtn.style.display     = 'none';
+  });
+
+  // Annuler
+  clearNo?.addEventListener('click', () => {
+    clearConfirm.style.display = 'none';
+    clearBtn.style.display     = '';
+  });
+
+  // Confirmer l'effacement
+  clearYes?.addEventListener('click', async () => {
+    clearYes.disabled = true;
+    clearYes.textContent = '…';
+    await clearHistory();
+    clearConfirm.style.display = 'none';
+    clearYes.disabled    = false;
+    clearYes.textContent = 'Effacer';
+  });
+}
+
+async function clearHistory() {
+  const { error } = await supabase
+    .from('rides')
+    .delete()
+    .eq('driver_id', currentPhone)
+    .in('status', ['rejected', 'cancelled']);
+
+  if (error) {
+    console.error('Erreur suppression historique:', error.message);
+    alert('Impossible d\'effacer l\'historique. Vérifiez votre connexion.');
+    return;
+  }
+
+  // Nettoyer le cache local
+  for (const [id, ride] of ridesMap) {
+    if (ride.status === 'rejected' || ride.status === 'cancelled') {
+      ridesMap.delete(id);
+    }
+  }
+  historyPage = 0;
+  renderHistory();
 }
 
 async function handleRideAction(rideId, status) {
@@ -784,15 +916,54 @@ async function handleRideAction(rideId, status) {
     await updateRideStatus(rideId, status);
     const ride = ridesMap.get(rideId);
     if (ride) {
-      ride.status = status;
+      ride.status     = status;
+      ride.updated_at = new Date().toISOString();
       ridesMap.set(rideId, ride);
     }
+
+    // À l'acceptation : marquer indisponible immédiatement
+    if (status === 'accepted') {
+      isAvailable = false;
+      await supabase.from('drivers').update({ disponible: false }).eq('id', currentPhone);
+      renderToggle();
+      startAcceptedCountdown(rideId);
+    }
+
     renderActiveRide();
     renderHistory();
   } catch (err) {
     console.error('Erreur mise à jour course:', err);
     if (card) card.querySelectorAll('button').forEach(b => { b.disabled = false; });
   }
+}
+
+let driverCountdownTimer = null;
+let driverCountdownEndAt = null; // timestamp absolu de fin (ms)
+
+function startAcceptedCountdown(rideId) {
+  if (driverCountdownTimer) { clearInterval(driverCountdownTimer); driverCountdownTimer = null; }
+
+  // On fixe endAt au moment exact de l'acceptation, sans dépendre de ride.updated_at
+  driverCountdownEndAt = Date.now() + CONTACT_WINDOW_S * 1000;
+
+  driverCountdownTimer = setInterval(() => {
+    const remaining = Math.max(0, Math.ceil((driverCountdownEndAt - Date.now()) / 1000));
+    const card      = document.getElementById(`countdown-${rideId}`);
+    const numEl     = document.getElementById(`rcd-num-${rideId}`);
+    const descEl    = card?.querySelector('.rcd-desc');
+    const labelEl   = card?.querySelector('.rcd-label');
+    const urgent    = remaining <= 5;
+
+    if (numEl)  numEl.textContent  = remaining > 0 ? remaining : '✅';
+    if (labelEl)  labelEl.textContent  = remaining > 0 ? 'secondes' : 'Terminé';
+    if (descEl)   descEl.textContent   = remaining > 0 ? 'Le passager peut vous appeler' : 'Fenêtre de contact écoulée';
+    if (card)     card.classList.toggle('urgent', urgent && remaining > 0);
+
+    if (remaining === 0) {
+      clearInterval(driverCountdownTimer);
+      driverCountdownTimer = null;
+    }
+  }, 1000);
 }
 
 // ── Déconnexion ───────────────────────────────────────────────
@@ -808,7 +979,17 @@ async function doLogout() {
     driverMarker = null;
   }
 
-  // 2. Mise à jour Supabase en arrière-plan (n'attend pas)
+  // 3. Fermer les subscriptions Realtime (évite les fuites mémoire)
+  if (configChannel) {
+    await supabase.removeChannel(configChannel);
+    configChannel = null;
+  }
+  if (window._cleanupPayment) {
+    await window._cleanupPayment();
+    window._cleanupPayment = null;
+  }
+
+  // 4. Mise à jour Supabase en arrière-plan (n'attend pas)
   const phoneToUpdate = currentPhone;
   if (phoneToUpdate) {
     Promise.resolve(
@@ -816,7 +997,7 @@ async function doLogout() {
     ).catch(() => {});
   }
 
-  // 3. Effacer la session et rediriger vers la page d'authentification
+  // 5. Effacer la session et rediriger vers la page d'authentification
   localStorage.removeItem('pnr_driver');
   window.location.replace('driver-auth.html');
 }

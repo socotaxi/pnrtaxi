@@ -10,19 +10,39 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ── Compte admin ──────────────────────────────────────────────
-const ADMIN_PHONE    = '+242050787624';
-const ADMIN_KEY      = 'pnr_admin';
+// ⚠️ Le numéro admin N'EST PLUS stocké ici — il est vérifié côté
+//    serveur uniquement dans la RPC verify_admin_password (rate_limit.sql).
+//    Après login réussi, le numéro tapé est stocké en sessionStorage.
+const ADMIN_KEY = 'pnr_admin';
+
+function getAdminPhone() {
+  return sessionStorage.getItem('pnr_admin_phone') || '';
+}
+
+// ── Utilitaires sécurité ──────────────────────────────────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // ── Audit logging ─────────────────────────────────────────────
 async function audit(action, targetId, details) {
   try {
-    await sb.rpc('insert_audit_log', {
-      p_admin_phone: ADMIN_PHONE,
+    const { error } = await sb.rpc('insert_audit_log', {
+      p_admin_phone: getAdminPhone(),
       p_action:      action,
       p_target_id:   targetId || null,
       p_details:     details  ? details : null,
     });
-  } catch (_) {}
+    if (error) console.warn('[Audit] Échec enregistrement:', action, error.message);
+  } catch (e) {
+    console.warn('[Audit] Erreur réseau:', action, e?.message);
+  }
 }
 
 // ── État ─────────────────────────────────────────────────────
@@ -37,11 +57,12 @@ const PAGE_SIZE        = 5;
 
 // ── Authentification par numéro + mot de passe ────────────────
 async function checkSession() {
-  return sessionStorage.getItem(ADMIN_KEY) === ADMIN_PHONE;
+  return sessionStorage.getItem(ADMIN_KEY) === 'authenticated';
 }
 
 async function clearSession() {
   sessionStorage.removeItem(ADMIN_KEY);
+  sessionStorage.removeItem('pnr_admin_phone');
 }
 
 // ── Démarrage ─────────────────────────────────────────────────
@@ -82,12 +103,28 @@ function setupLogin() {
     btn.textContent = 'Connexion…';
     errorEl.textContent = '';
 
-    var res = await sb.rpc('verify_passenger_password', {
+    // verify_admin_password vérifie côté serveur que le numéro est admin
+    // et applique le rate limiting (max 5 échecs / 5 min)
+    var res = await sb.rpc('verify_admin_password', {
       p_telephone: phone,
       p_password:  password,
     });
 
-    if (res.error || !res.data || res.data.length === 0) {
+    var rateLimited = res.error && res.error.message && res.error.message.includes('RATE_LIMIT_EXCEEDED');
+
+    // Supabase peut retourner le BOOLEAN sous plusieurs formes selon la version du client
+    var isAdmin = res.data === true
+      || res.data === 'true'
+      || (Array.isArray(res.data) && res.data[0] === true)
+      || (Array.isArray(res.data) && res.data[0]?.verify_admin_password === true);
+
+    if (rateLimited) {
+      lockUntil = Date.now() + 60 * 1000;
+      attempts  = 0;
+      errorEl.textContent = 'Trop de tentatives. Attendez 60 s.';
+      pwdIn.value = '';
+      pwdIn.focus();
+    } else if (res.error || !isAdmin) {
       attempts++;
       if (attempts >= 5) {
         lockUntil = Date.now() + 60 * 1000;
@@ -100,13 +137,10 @@ function setupLogin() {
       pwdIn.style.borderColor = 'var(--red)';
       setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
       pwdIn.focus();
-    } else if (res.data[0].telephone !== ADMIN_PHONE) {
-      errorEl.textContent = 'Accès refusé : compte non administrateur.';
-      pwdIn.style.borderColor = 'var(--red)';
-      setTimeout(function () { pwdIn.style.borderColor = ''; }, 1500);
     } else {
       attempts = 0;
-      sessionStorage.setItem(ADMIN_KEY, ADMIN_PHONE);
+      sessionStorage.setItem(ADMIN_KEY, 'authenticated');
+      sessionStorage.setItem('pnr_admin_phone', phone);
       audit('login', null, { telephone: phone });
       showDashboard();
     }
@@ -188,9 +222,9 @@ async function loadKPIs() {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   const [r1, r2, r3, r4] = await Promise.all([
-    sb.from('drivers').select('*', { count: 'exact', head: true }),
-    sb.from('drivers').select('*', { count: 'exact', head: true }).eq('disponible', true),
-    sb.from('driver_access').select('*', { count: 'exact', head: true }).eq('statut', 'en_attente'),
+    sb.from('drivers').select('id', { count: 'exact', head: true }),
+    sb.from('drivers').select('id', { count: 'exact', head: true }).eq('disponible', true),
+    sb.from('driver_access').select('id', { count: 'exact', head: true }).eq('statut', 'en_attente'),
     sb.from('driver_access').select('montant').eq('statut', 'actif').neq('type', 'gratuit').gte('created_at', startOfMonth),
   ]);
 
@@ -244,52 +278,82 @@ function setupConfigSave() {
 
     var res = await sb.rpc('update_app_config', {
       p_updates:     updatesObj,
-      p_admin_phone: ADMIN_PHONE,
+      p_admin_phone: getAdminPhone(),
     });
-    var ok = !res.error;
+
+    // Vérifier en relisant la DB que la valeur a bien changé
+    var verif = await sb.from('app_config').select('cle, valeur');
+    var savedCfg = {};
+    if (verif.data) verif.data.forEach(function (r) { savedCfg[r.cle] = r.valeur; });
+    var ok = !res.error && savedCfg.gratuite_duree_mois === String(updatesObj.gratuite_duree_mois);
 
     btn.disabled    = false;
     btn.textContent = 'Enregistrer la configuration';
 
     if (ok) {
+      // Mettre à jour les lignes driver_access de type gratuit encore actives
+      // pour qu'elles respectent la nouvelle durée
+      var newMois = parseInt(updatesObj.gratuite_duree_mois, 10) || 1;
+      var now     = new Date();
+      var newExp  = new Date(now);
+      newExp.setMonth(newExp.getMonth() + newMois);
+
+      await sb
+        .from('driver_access')
+        .update({ date_expiration: newExp.toISOString() })
+        .eq('type', 'gratuit')
+        .eq('statut', 'actif')
+        .gt('date_expiration', now.toISOString()); // uniquement les non expirés
+
+      // Mettre à jour appConfig en mémoire
+      appConfig = Object.assign(appConfig || {}, savedCfg);
+      // Rafraîchir l'affichage du formulaire
+      var dureeEl = document.getElementById('cfg-duree');
+      if (dureeEl) dureeEl.value = savedCfg.gratuite_duree_mois || '1';
+
       await audit('update_config', null, updatesObj);
       feedback.style.color = 'var(--green)';
       feedback.textContent = '✓ Configuration enregistrée';
       showSnackbar('Configuration mise à jour avec succès');
     } else {
       feedback.style.color = 'var(--red)';
-      feedback.textContent = '✗ Erreur lors de la sauvegarde';
+      feedback.textContent = '✗ Erreur lors de la sauvegarde — vérifiez la console';
+      console.error('update_app_config error:', res.error, '| valeur lue:', savedCfg.gratuite_duree_mois, '| attendu:', updatesObj.gratuite_duree_mois);
     }
 
-    setTimeout(function () { feedback.textContent = ''; }, 3000);
+    setTimeout(function () { feedback.textContent = ''; }, 4000);
   });
 }
 
-// ── Paiements en attente ──────────────────────────────────────
+// ── Paiements en attente (pagination côté serveur) ────────────
+var pendingTotal = 0;
+
 async function loadPendingPayments() {
   var wrap = document.getElementById('pending-table-wrap');
   if (!wrap) return;
 
+  var from = pendingPage * PAGE_SIZE;
+  var to   = from + PAGE_SIZE - 1;
+
   var res = await sb
     .from('driver_access')
-    .select('id, driver_id, type, montant, ref_paiement, operateur, created_at, drivers ( nom, prenom, telephone, photo )')
+    .select('id, driver_id, type, montant, ref_paiement, operateur, created_at, drivers ( nom, prenom, telephone, photo )', { count: 'exact' })
     .eq('statut', 'en_attente')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
-  var data = res.data;
+  if (res.error) throw res.error;
 
-  if (!data || data.length === 0) {
-    allPendingPayments = [];
-    pendingPage = 0;
+  pendingTotal        = res.count ?? 0;
+  allPendingPayments  = res.data || [];
+
+  var badge = document.getElementById('pending-count-badge');
+  if (badge) badge.textContent = pendingTotal;
+
+  if (pendingTotal === 0) {
     wrap.innerHTML = '<div class="table-empty"><div class="table-empty-icon">🎉</div><div>Aucun paiement en attente</div></div>';
     return;
   }
-
-  allPendingPayments = data;
-  pendingPage = 0;
-
-  var badge = document.getElementById('pending-count-badge');
-  if (badge) badge.textContent = data.length;
 
   renderPendingTable();
 }
@@ -298,13 +362,9 @@ function renderPendingTable() {
   var wrap = document.getElementById('pending-table-wrap');
   if (!wrap) return;
 
-  var data  = allPendingPayments;
-  var total = data.length;
-  var slice = data.slice(pendingPage * PAGE_SIZE, (pendingPage + 1) * PAGE_SIZE);
-
-  var rows = slice.map(renderPendingRow).join('');
+  var rows = allPendingPayments.map(renderPendingRow).join('');
   wrap.innerHTML = '<div class="table-scroll"><table class="data-table"><thead><tr><th>Chauffeur</th><th>Formule</th><th>Opérateur</th><th>Référence</th><th>Date</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-    + buildPagination(pendingPage, total, 'pending-prev', 'pending-next');
+    + buildPagination(pendingPage, pendingTotal, 'pending-prev', 'pending-next');
 
   wrap.querySelectorAll('[data-action="validate"]').forEach(function (btn) {
     btn.addEventListener('click', function () { validatePayment(btn.dataset.id, btn.dataset.type); });
@@ -315,26 +375,28 @@ function renderPendingTable() {
 
   var pp = document.getElementById('pending-prev');
   var pn = document.getElementById('pending-next');
-  if (pp) pp.addEventListener('click', function () { pendingPage--; renderPendingTable(); });
-  if (pn) pn.addEventListener('click', function () { pendingPage++; renderPendingTable(); });
+  if (pp) pp.addEventListener('click', function () { pendingPage--; loadPendingPayments(); });
+  if (pn) pn.addEventListener('click', function () { pendingPage++; loadPendingPayments(); });
 }
 
 function renderPendingRow(row) {
   var driver   = row.drivers || {};
-  var name     = [driver.prenom, driver.nom].filter(Boolean).join(' ') || row.driver_id;
-  var initiale = (driver.prenom || driver.nom || '?').charAt(0).toUpperCase();
-  var avatar   = driver.photo ? '<img src="' + driver.photo + '" alt="' + name + '" />' : initiale;
+  var name     = escapeHtml([driver.prenom, driver.nom].filter(Boolean).join(' ') || row.driver_id);
+  var initiale = escapeHtml((driver.prenom || driver.nom || '?').charAt(0).toUpperCase());
+  var avatar   = driver.photo
+    ? '<img src="' + escapeHtml(driver.photo) + '" alt="' + name + '" />'
+    : initiale;
   var opBadge  = row.operateur === 'mtn'
     ? '<span class="op-badge op-badge--mtn">🟡 MTN</span>'
     : '<span class="op-badge op-badge--airtel">🔴 Airtel</span>';
   var planLabel = row.type === 'journee' ? '☀️ Journée' : '📅 Semaine';
 
-  return '<tr><td><div class="driver-cell"><div class="driver-avatar">' + avatar + '</div><div><div class="driver-name">' + name + '</div><div class="driver-phone">' + (driver.telephone || row.driver_id) + '</div></div></div></td>'
-    + '<td data-label="Formule"><span class="badge badge--blue">' + planLabel + '</span><div style="font-size:.75rem;color:var(--muted);margin-top:3px">' + row.montant + ' FCFA</div></td>'
+  return '<tr><td><div class="driver-cell"><div class="driver-avatar">' + avatar + '</div><div><div class="driver-name">' + name + '</div><div class="driver-phone">' + escapeHtml(driver.telephone || row.driver_id) + '</div></div></div></td>'
+    + '<td data-label="Formule"><span class="badge badge--blue">' + planLabel + '</span><div style="font-size:.75rem;color:var(--muted);margin-top:3px">' + escapeHtml(String(row.montant)) + ' FCFA</div></td>'
     + '<td data-label="Opérateur">' + opBadge + '</td>'
-    + '<td data-label="Référence"><span class="ref-code">' + (row.ref_paiement || '—') + '</span></td>'
+    + '<td data-label="Référence"><span class="ref-code">' + escapeHtml(row.ref_paiement || '—') + '</span></td>'
     + '<td data-label="Date" style="font-size:.78rem;color:var(--muted)">' + formatDate(row.created_at) + '</td>'
-    + '<td><div class="actions-group"><button class="action-btn action-btn--validate" data-action="validate" data-id="' + row.id + '" data-type="' + row.type + '" title="Valider">✓</button><button class="action-btn action-btn--reject" data-action="reject" data-id="' + row.id + '" title="Rejeter">✕</button></div></td></tr>';
+    + '<td><div class="actions-group"><button class="action-btn action-btn--validate" data-action="validate" data-id="' + escapeHtml(row.id) + '" data-type="' + escapeHtml(row.type) + '" title="Valider">✓</button><button class="action-btn action-btn--reject" data-action="reject" data-id="' + escapeHtml(row.id) + '" title="Rejeter">✕</button></div></td></tr>';
 }
 
 async function validatePayment(accessId, type) {
@@ -368,25 +430,37 @@ async function rejectPayment(accessId) {
   }
 }
 
-// ── Liste des chauffeurs ──────────────────────────────────────
+// ── Liste des chauffeurs (pagination côté serveur) ────────────
+var driversTotal = 0;
+
 async function loadDrivers() {
   var wrap = document.getElementById('drivers-table-wrap');
   if (!wrap) return;
 
-  var r1 = await sb.from('drivers').select('*').order('created_at', { ascending: false });
+  var from = driversPage * PAGE_SIZE;
+  var to   = from + PAGE_SIZE - 1;
+
+  // Filtre SQL selon l'onglet actif (join avec driver_access)
+  var query = sb.from('drivers')
+    .select('id, telephone, prenom, nom, photo, disponible, immatriculation, created_at, driver_access ( id, statut, type, date_expiration )', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  var r1 = await query;
   if (r1.error || !r1.data) { wrap.innerHTML = '<div class="table-empty"><div>Erreur de chargement</div></div>'; return; }
 
-  var r2 = await sb.from('driver_access').select('*').in('statut', ['actif', 'en_attente']).gt('date_expiration', new Date().toISOString());
+  driversTotal = r1.count ?? 0;
 
-  var accessMap = {};
-  (r2.data || []).forEach(function (a) {
-    if (!accessMap[a.driver_id] || a.statut === 'actif') accessMap[a.driver_id] = a;
+  // Construire accessMap depuis les données embarquées
+  allDrivers = r1.data.map(function (d) {
+    var accesses = d.driver_access || [];
+    var active   = accesses.find(function (a) { return a.statut === 'actif' && new Date(a.date_expiration) > new Date(); });
+    var pending  = accesses.find(function (a) { return a.statut === 'en_attente'; });
+    return Object.assign({}, d, { access: active || pending || null });
   });
 
-  allDrivers = r1.data.map(function (d) { return Object.assign({}, d, { access: accessMap[d.id] || null }); });
-
   var badge = document.getElementById('drivers-count-badge');
-  if (badge) badge.textContent = allDrivers.length;
+  if (badge) badge.textContent = driversTotal;
 
   renderDriversTable();
 }
@@ -395,19 +469,17 @@ function renderDriversTable() {
   var wrap = document.getElementById('drivers-table-wrap');
   if (!wrap) return;
 
+  // Filtre local sur la page courante (les filtres par statut nécessitent rechargement)
   var filtered = filterDrivers(allDrivers, currentFilter);
 
-  if (filtered.length === 0) {
+  if (filtered.length === 0 && driversTotal === 0) {
     wrap.innerHTML = '<div class="table-empty"><div class="table-empty-icon">🔍</div><div>Aucun chauffeur dans cette catégorie</div></div>';
     return;
   }
 
-  var total = filtered.length;
-  var slice = filtered.slice(driversPage * PAGE_SIZE, (driversPage + 1) * PAGE_SIZE);
-
-  var rows = slice.map(renderDriverRow).join('');
+  var rows = filtered.map(renderDriverRow).join('');
   wrap.innerHTML = '<div class="table-scroll"><table class="data-table"><thead><tr><th>Chauffeur</th><th>Statut GPS</th><th>Accès</th><th>Expire le</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-    + buildPagination(driversPage, total, 'drivers-prev', 'drivers-next');
+    + buildPagination(driversPage, driversTotal, 'drivers-prev', 'drivers-next');
 
   wrap.querySelectorAll('[data-action="grant"]').forEach(function (btn) {
     btn.addEventListener('click', function () { openGrantModal(btn.dataset.id, btn.dataset.name); });
@@ -418,8 +490,8 @@ function renderDriversTable() {
 
   var dp = document.getElementById('drivers-prev');
   var dn = document.getElementById('drivers-next');
-  if (dp) dp.addEventListener('click', function () { driversPage--; renderDriversTable(); });
-  if (dn) dn.addEventListener('click', function () { driversPage++; renderDriversTable(); });
+  if (dp) dp.addEventListener('click', function () { driversPage--; loadDrivers(); });
+  if (dn) dn.addEventListener('click', function () { driversPage++; loadDrivers(); });
 }
 
 function filterDrivers(drivers, filter) {
@@ -434,9 +506,11 @@ function filterDrivers(drivers, filter) {
 }
 
 function renderDriverRow(driver) {
-  var name     = [driver.prenom, driver.nom].filter(Boolean).join(' ') || '—';
-  var initiale = (driver.prenom || driver.nom || '?').charAt(0).toUpperCase();
-  var avatar   = driver.photo ? '<img src="' + driver.photo + '" alt="' + name + '" />' : initiale;
+  var name     = escapeHtml([driver.prenom, driver.nom].filter(Boolean).join(' ') || '—');
+  var initiale = escapeHtml((driver.prenom || driver.nom || '?').charAt(0).toUpperCase());
+  var avatar   = driver.photo
+    ? '<img src="' + escapeHtml(driver.photo) + '" alt="' + name + '" />'
+    : initiale;
 
   var gpsStatus = driver.disponible
     ? '<span class="badge badge--green">🟢 En service</span>'
@@ -458,11 +532,11 @@ function renderDriverRow(driver) {
     expireCell  = formatDate(a.date_expiration, true);
   }
 
-  return '<tr><td><div class="driver-cell"><div class="driver-avatar">' + avatar + '</div><div><div class="driver-name">' + name + '</div><div class="driver-phone">' + (driver.telephone || driver.id) + '</div></div></div></td>'
+  return '<tr><td><div class="driver-cell"><div class="driver-avatar">' + avatar + '</div><div><div class="driver-name">' + name + '</div><div class="driver-phone">' + escapeHtml(driver.telephone || driver.id) + '</div></div></div></td>'
     + '<td data-label="GPS">' + gpsStatus + '</td>'
     + '<td data-label="Accès">' + accessBadge + '</td>'
     + '<td data-label="Expire le" style="font-size:.82rem;color:var(--muted)">' + expireCell + '</td>'
-    + '<td><div class="actions-group"><button class="action-btn action-btn--grant" data-action="grant" data-id="' + driver.id + '" data-name="' + name + '" title="Offrir accès">🎁</button><button class="action-btn action-btn--disable" data-action="disable" data-id="' + driver.id + '" title="Révoquer accès">🚫</button></div></td></tr>';
+    + '<td><div class="actions-group"><button class="action-btn action-btn--grant" data-action="grant" data-id="' + escapeHtml(driver.id) + '" data-name="' + name + '" title="Offrir accès">🎁</button><button class="action-btn action-btn--disable" data-action="disable" data-id="' + escapeHtml(driver.id) + '" title="Révoquer accès">🚫</button></div></td></tr>';
 }
 
 // ── Tabs ──────────────────────────────────────────────────────
@@ -473,7 +547,7 @@ function setupTabs() {
       tab.classList.add('active');
       currentFilter = tab.dataset.filter;
       driversPage = 0;
-      renderDriversTable();
+      loadDrivers();
     });
   });
 }
@@ -599,19 +673,19 @@ async function loadAuditLog() {
   }
 
   var rows = res.data.map(function (row) {
-    var label   = ACTION_LABELS[row.action] || row.action;
+    var label   = escapeHtml(ACTION_LABELS[row.action] || row.action);
     var details = '';
     if (row.details) {
       try {
         var d = typeof row.details === 'string' ? JSON.parse(row.details) : row.details;
-        details = Object.entries(d).map(function (kv) { return kv[0] + ': ' + kv[1]; }).join(' · ');
+        details = escapeHtml(Object.entries(d).map(function (kv) { return kv[0] + ': ' + kv[1]; }).join(' · '));
       } catch (_) {}
     }
     return '<tr>'
       + '<td data-label="Date" style="font-size:.78rem;color:var(--muted);white-space:nowrap">' + formatDate(row.created_at) + '</td>'
-      + '<td data-label="Admin" style="font-size:.82rem">' + (row.admin_email || '—') + '</td>'
+      + '<td data-label="Admin" style="font-size:.82rem">' + escapeHtml(row.admin_email || '—') + '</td>'
       + '<td data-label="Action"><span class="badge badge--blue" style="font-size:.75rem">' + label + '</span></td>'
-      + '<td data-label="Cible" style="font-size:.78rem;color:var(--muted);font-family:monospace">' + (row.target_id ? row.target_id.slice(0, 8) + '…' : '—') + '</td>'
+      + '<td data-label="Cible" style="font-size:.78rem;color:var(--muted);font-family:monospace">' + (row.target_id ? escapeHtml(row.target_id.slice(0, 8)) + '…' : '—') + '</td>'
       + '<td data-label="Détails" style="font-size:.75rem;color:var(--muted)">' + (details || '—') + '</td>'
       + '</tr>';
   }).join('');

@@ -510,6 +510,19 @@
 </div><!-- /profile-screen -->
 
 <!-- ══════════════════════════════════════════
+     MODALE REFUS DE COURSE
+══════════════════════════════════════════ -->
+<div id="ride-rejected-modal" class="ride-rejected-modal hidden" role="alertdialog" aria-modal="true">
+  <div class="ride-rejected-backdrop"></div>
+  <div class="ride-rejected-card">
+    <div class="ride-rejected-icon">❌</div>
+    <h3 class="ride-rejected-title">Demande refusée</h3>
+    <p class="ride-rejected-msg">Le chauffeur a refusé votre demande de course. Vous pouvez en choisir un autre.</p>
+    <button class="ride-rejected-close" id="ride-rejected-close">OK, fermer</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      BANDEAU STATUT DE COURSE
 ══════════════════════════════════════════ -->
 <div id="ride-banner" class="ride-banner hidden" role="status" aria-live="polite">
@@ -519,6 +532,11 @@
     <div class="ride-banner-body">
       <div class="ride-banner-title" id="ride-banner-title">En attente de confirmation…</div>
       <div class="ride-banner-driver" id="ride-banner-driver">—</div>
+    </div>
+    <!-- Compteur géant (visible uniquement en état accepted) -->
+    <div class="rbc-box" id="rbc-box" style="display:none">
+      <span class="rbc-number" id="rbc-number">30</span>
+      <span class="rbc-label">sec</span>
     </div>
     <button class="ride-banner-cancel" id="ride-banner-cancel">Annuler</button>
   </div>

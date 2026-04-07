@@ -6,7 +6,35 @@
 import { supabase } from './supabase-config.js';
 
 const SESSION_KEY    = 'pnr_passenger';
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 jours
+
+// ── Rate limiting côté client (filet de sécurité UI) ─────────
+const RL_KEY      = 'pnr_login_attempts';
+const RL_MAX      = 5;
+const RL_WINDOW   = 5 * 60 * 1000; // 5 minutes
+
+function getRlState() {
+  try { return JSON.parse(localStorage.getItem(RL_KEY) || '{}'); } catch { return {}; }
+}
+function isRateLimited() {
+  const s = getRlState();
+  if (!s.until) return false;
+  if (Date.now() < s.until) return s.until;
+  localStorage.removeItem(RL_KEY);
+  return false;
+}
+function recordLoginAttempt(success) {
+  if (success) { localStorage.removeItem(RL_KEY); return; }
+  const s = getRlState();
+  const now = Date.now();
+  const attempts = (s.attempts || []).filter(t => now - t < RL_WINDOW);
+  attempts.push(now);
+  if (attempts.length >= RL_MAX) {
+    localStorage.setItem(RL_KEY, JSON.stringify({ until: now + RL_WINDOW, attempts: [] }));
+  } else {
+    localStorage.setItem(RL_KEY, JSON.stringify({ attempts }));
+  }
+}
 
 // ── Session ──────────────────────────────────────────────────
 export function getSession() {
@@ -46,8 +74,12 @@ async function verifyPassword(telephone, password) {
     p_telephone: telephone,
     p_password:  password,
   });
-  if (error || !data || data.length === 0) return null;
-  return data[0];
+  if (error) {
+    // Propager l'erreur pour que le handler puisse distinguer rate limit vs mauvais mdp
+    throw new Error(error.message || 'Erreur de connexion');
+  }
+  if (!data || (Array.isArray(data) && data.length === 0)) return null;
+  return Array.isArray(data) ? data[0] : data;
 }
 
 async function registerPassenger(telephone, prenom, nom, quartier, ville, password) {
@@ -122,6 +154,14 @@ function bindTogglePassword(btnId, inputId, eyeId) {
   });
 }
 
+// ── Validation numéro de téléphone ───────────────────────────
+// Accepte les formats internationaux courants : +XXX suivi de 6 à 9 chiffres
+function validatePhone(prefix, digits) {
+  if (!/^\d{6,9}$/.test(digits)) return false;
+  const full = '+' + prefix + digits;
+  return /^\+\d{7,15}$/.test(full);
+}
+
 // ── Point d'entrée principal ──────────────────────────────────
 export async function initAuth(onComplete) {
   // Session locale existante ?
@@ -154,7 +194,10 @@ export async function initAuth(onComplete) {
 
   btnSend.addEventListener('click', async () => {
     const digits = phoneInput.value.trim();
-    if (digits.length < 6) return;
+    if (!validatePhone(prefixSelect.value, digits)) {
+      showAuthError('phone-error', 'Numéro invalide. Vérifiez le format.');
+      return;
+    }
 
     currentPhone = '+' + prefixSelect.value + digits;
     setLoading(btnSend, true, 'Vérification…');
@@ -193,12 +236,20 @@ export async function initAuth(onComplete) {
   });
 
   pwInput?.addEventListener('input', () => {
-    btnLogin.disabled = pwInput.value.length < 4;
+    btnLogin.disabled = pwInput.value.length < 8;
   });
 
   btnLogin?.addEventListener('click', async () => {
     const password = pwInput.value;
-    if (password.length < 4) return;
+    if (password.length < 8) return;
+
+    // Vérification rate limiting côté client
+    const blockedUntil = isRateLimited();
+    if (blockedUntil) {
+      const secs = Math.ceil((blockedUntil - Date.now()) / 1000);
+      showAuthError('pw-error', `Trop de tentatives. Attendez ${secs} s.`);
+      return;
+    }
 
     setLoading(btnLogin, true, 'Connexion…');
 
@@ -206,15 +257,33 @@ export async function initAuth(onComplete) {
       const profile = await verifyPassword(currentPhone, password);
 
       if (!profile) {
+        recordLoginAttempt(false);
         showAuthError('pw-error', 'Mot de passe incorrect. Réessayez.');
         return;
       }
 
+      recordLoginAttempt(true);
       saveSession(
         profile.telephone, profile.prenom, profile.nom,
         profile.email, profile.auth_provider, profile.avatar_url,
         profile.quartier, profile.ville
       );
+
+      // Si ce numéro est l'admin, poser la session admin automatiquement
+      // (vérification côté serveur — le numéro admin n'est jamais dans le frontend)
+      try {
+        const adminRes = await supabase.rpc('verify_admin_password', {
+          p_telephone: currentPhone,
+          p_password:  password,
+        });
+        const isAdmin = adminRes.data === true
+          || (Array.isArray(adminRes.data) && adminRes.data[0] === true);
+        if (isAdmin) {
+          sessionStorage.setItem('pnr_admin', 'authenticated');
+          sessionStorage.setItem('pnr_admin_phone', currentPhone);
+        }
+      } catch (_) {}
+
       document.getElementById('auth-overlay').classList.remove('visible');
       onComplete({
         telephone: profile.telephone,
@@ -223,8 +292,13 @@ export async function initAuth(onComplete) {
         quartier:  profile.quartier,
         ville:     profile.ville,
       });
-    } catch {
-      showAuthError('pw-error', 'Erreur de connexion. Réessayez.');
+    } catch (err) {
+      if (err?.message?.includes('RATE_LIMIT_EXCEEDED')) {
+        showAuthError('pw-error', 'Trop de tentatives. Attendez 5 minutes.');
+      } else {
+        showAuthError('pw-error', 'Erreur de connexion. Réessayez.');
+      }
+      recordLoginAttempt(false);
     } finally {
       setLoading(btnLogin, false, 'Se connecter');
     }
@@ -305,7 +379,7 @@ export async function initAuth(onComplete) {
       && (villeInput    ? villeInput.value.trim().length    >= 2 : false)
       && (quartierInput ? quartierInput.value.trim().length >= 2 : false);
 
-    const pwOk = pw.length >= 6 && pw === confirm;
+    const pwOk = pw.length >= 8 && pw === confirm;
 
     btnStart.disabled = !(namesOk && pwOk);
 
@@ -332,8 +406,8 @@ export async function initAuth(onComplete) {
     const password = signupPwInput?.value        || '';
 
     if (nom.length < 2 || prenom.length < 2) return;
-    if (password.length < 6) {
-      showAuthError('name-error', 'Le mot de passe doit faire au moins 6 caractères.');
+    if (password.length < 8) {
+      showAuthError('name-error', 'Le mot de passe doit faire au moins 8 caractères.');
       return;
     }
     if (password !== (signupPwConfirm?.value || '')) {

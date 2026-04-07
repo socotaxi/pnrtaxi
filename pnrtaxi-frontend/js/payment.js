@@ -125,7 +125,8 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
   let tarifSemaine = 1000;
 
   // ── Subscription Realtime — écoute les changements d'accès ─
-  supabase
+  // Le channel est stocké pour pouvoir être fermé au logout (via cleanup()).
+  const accessChannel = supabase
     .channel(`driver-access-${driverId}`)
     .on(
       'postgres_changes',
@@ -256,21 +257,21 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
     spinner.style.display     = '';
 
     try {
-      const { error } = await supabase
-        .from('driver_access')
-        .insert({
-          driver_id:       driverId,
-          type:            plan,
-          montant:         plan === 'semaine' ? tarifSemaine : tarifJournee,
-          date_debut:      new Date().toISOString(),
-          // date_expiration provisoire — l'admin la confirme lors de la validation
-          date_expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-          statut:          'en_attente',
-          ref_paiement:    ref.toUpperCase(),
-          operateur:       currentOp,
-        });
+      // La RPC vérifie côté serveur que le montant correspond au tarif configuré
+      const montant = plan === 'semaine' ? tarifSemaine : tarifJournee;
+      const { data, error } = await supabase.rpc('submit_payment_request', {
+        p_driver_id: driverId,
+        p_type:      plan,
+        p_montant:   montant,
+        p_ref:       ref,
+        p_operateur: currentOp,
+      });
 
       if (error) throw error;
+      if (!data?.ok) {
+        errorEl.textContent = data?.error || 'Demande refusée. Réessayez.';
+        return;
+      }
 
       // Succès
       closeModal();
@@ -278,8 +279,10 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
       pendingOvl.setAttribute('aria-hidden', 'false');
       if (onSuccess) onSuccess();
 
-    } catch {
-      errorEl.textContent = 'Une erreur est survenue. Vérifiez votre connexion et réessayez.';
+    } catch (err) {
+      errorEl.textContent = err?.message?.includes('déjà en attente')
+        ? 'Une demande est déjà en cours de validation.'
+        : 'Une erreur est survenue. Vérifiez votre connexion et réessayez.';
     } finally {
       submitBtn.disabled       = false;
       submitLabel.style.display = '';
@@ -287,7 +290,11 @@ export async function initPaymentModal(driverId, supabase, onSuccess) {
     }
   });
 
-  return { openModal };
+  async function cleanup() {
+    await supabase.removeChannel(accessChannel);
+  }
+
+  return { openModal, cleanup };
 }
 
 // ── Toast de notification d'accès ────────────────────────────

@@ -7,6 +7,15 @@ import { haversineDistance, formatDistance } from './haversine.js';
 import { initAuth, clearSession } from './auth.js';
 import { requestRide, updateRideStatus, watchActiveRide } from './rides.js';
 
+// ── Sécurité : sanitize URL pour attributs src/href ──────────
+// Autorise uniquement https:// et les blob: locaux (aperçu avatar)
+function sanitizeUrl(url) {
+  if (!url) return '';
+  const s = String(url).trim();
+  if (s.startsWith('https://') || s.startsWith('blob:')) return s;
+  return '';
+}
+
 // ── Constantes ──────────────────────────────────────────────
 const CENTER             = { lat: -4.7792, lng: 11.8650 };
 const ZOOM               = 13;
@@ -21,15 +30,44 @@ function isDriverConnected(driver) {
 }
 
 // ── État global ──────────────────────────────────────────────
-let map           = null;
-let userLat       = null;
-let userLng       = null;
-let userMarker    = null;
-let userWatchId   = null;   // watchPosition handle
-let session       = null;   // session passager courante
-let activeRide    = null;   // course active (pending | accepted)
+let map              = null;
+let userLat          = null;
+let userLng          = null;
+let userMarker       = null;
+let userWatchId      = null;   // watchPosition handle
+let session          = null;   // session passager courante
+let activeRide       = null;   // course active (pending | accepted)
+let ridePollingTimer   = null;   // intervalle de polling pour le statut de la course
+let contactCountdown   = null;   // countdown de la fenêtre de contact (après acceptation)
+
+const CONTACT_WINDOW_S = 30; // doit correspondre à la valeur dans driver.js
 const driverMarkers = new Map(); // id → marker Leaflet
 const driversData   = new Map(); // id → données brutes
+
+// ── Polling de statut de course ───────────────────────────────
+function startRidePoll(rideId) {
+  stopRidePoll();
+  ridePollingTimer = setInterval(async () => {
+    if (!activeRide || activeRide.id !== rideId) { stopRidePoll(); return; }
+    try {
+      const { data } = await supabase
+        .from('rides')
+        .select('*, drivers(*)')
+        .eq('id', rideId)
+        .maybeSingle();
+      if (!data) return;
+      // Toujours appeler updateRideBanner si le statut a changé
+      if (data.status !== activeRide.status) updateRideBanner(data);
+      // Arrêter le polling uniquement pour les statuts finaux (rejected/cancelled/completed)
+      const finalStatuses = ['rejected', 'cancelled', 'completed'];
+      if (finalStatuses.includes(data.status)) stopRidePoll();
+    } catch (_) {}
+  }, 3000);
+}
+
+function stopRidePoll() {
+  if (ridePollingTimer) { clearInterval(ridePollingTimer); ridePollingTimer = null; }
+}
 
 // ── Carte ────────────────────────────────────────────────────
 function initMap() {
@@ -52,7 +90,7 @@ function makeUserIcon(avatarUrl) {
         box-shadow:0 0 0 2px #4a90e2, 0 2px 6px rgba(0,0,0,0.3);
         overflow:hidden;background:#4a90e2;
         flex-shrink:0;
-      "><img src="${avatarUrl}" alt="" style="
+      "><img src="${sanitizeUrl(avatarUrl)}" alt="" style="
         width:100%;height:100%;object-fit:cover;display:block;
       " onerror="this.parentElement.style.background='#4a90e2';this.remove();" /></div>`,
       iconSize: [20, 20],
@@ -84,12 +122,26 @@ function locateUser() {
     userWatchId = null;
   }
 
-  let firstFix = true;
+  let firstFix    = true;
+  let lastUserLat = null;
+  let lastUserLng = null;
 
   userWatchId = navigator.geolocation.watchPosition(
     (pos) => {
-      userLat = pos.coords.latitude;
-      userLng = pos.coords.longitude;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+
+      // Throttle : ignorer les micro-déplacements < ~11m (0.0001°)
+      const moved = lastUserLat === null
+        || Math.abs(lat - lastUserLat) > 0.0001
+        || Math.abs(lng - lastUserLng) > 0.0001;
+
+      if (!moved && !firstFix) return;
+
+      userLat     = lat;
+      userLng     = lng;
+      lastUserLat = lat;
+      lastUserLng = lng;
 
       if (userMarker) {
         userMarker.setLatLng([userLat, userLng]);
@@ -350,6 +402,10 @@ function updateRideBanner(ride) {
   if (!ride || ride.status === 'cancelled' || ride.status === 'completed' || isDismissed) {
     banner.className = 'ride-banner hidden';
     activeRide = null;
+    stopRidePoll();
+    if (contactCountdown) { clearInterval(contactCountdown); contactCountdown = null; }
+    const rbcBox = document.getElementById('rbc-box');
+    if (rbcBox) rbcBox.style.display = 'none';
     syncBannerWithPanel();
     return;
   }
@@ -379,12 +435,15 @@ function updateRideBanner(ride) {
     };
   } else if (ride.status === 'accepted') {
     banner.className = 'ride-banner accepted';
-    iconEl.textContent   = '✅';
-    titleEl.textContent  = 'Course acceptée !';
+    iconEl.textContent    = '✅';
+    titleEl.textContent   = 'Course acceptée !';
     cancelBtn.textContent = 'Fermer';
     cancelBtn.style.display = '';
     notifyPassenger('accepted');
     cancelBtn.onclick = async () => {
+      if (contactCountdown) { clearInterval(contactCountdown); contactCountdown = null; }
+      const box = document.getElementById('rbc-box');
+      if (box) box.style.display = 'none';
       localStorage.setItem(`dismissed_ride_${ride.id}`, '1');
       try { await updateRideStatus(ride.id, 'completed'); } catch (_) {}
       banner.classList.add('hidden');
@@ -392,31 +451,83 @@ function updateRideBanner(ride) {
       activeRide = null;
       refreshRideButtonInPanel();
     };
+
+    // ── Countdown fenêtre de contact (grand affichage) ───────
+    const rbcBox    = document.getElementById('rbc-box');
+    const rbcNumber = document.getElementById('rbc-number');
+
+    // N'afficher la boîte que si le countdown est en cours
+    if (rbcBox) rbcBox.style.display = '';
+
+    // Ne relancer le countdown que s'il n'est pas déjà actif
+    if (!contactCountdown) {
+      const base     = ride.updated_at ? new Date(ride.updated_at).getTime() : Date.now();
+      const computed = base + CONTACT_WINDOW_S * 1000;
+      const endAt    = computed > Date.now() ? computed : Date.now() + CONTACT_WINDOW_S * 1000;
+
+      contactCountdown = setInterval(async () => {
+        const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+        const urgent    = remaining <= 5;
+
+        // Boîte chiffrée passager
+        if (rbcNumber) rbcNumber.textContent = remaining;
+        if (rbcBox)    rbcBox.classList.toggle('urgent', urgent);
+
+        // Sous-titre bannière
+        if (remaining > 0) {
+          driverEl.textContent = `📞 Appelez le chauffeur maintenant !`;
+          driverEl.style.color = urgent ? '#ef4444' : '#16a34a';
+        } else {
+          clearInterval(contactCountdown); contactCountdown = null;
+          if (rbcBox) rbcBox.style.display = 'none';
+          // Fermer automatiquement la bannière et marquer la course comme terminée
+          localStorage.setItem(`dismissed_ride_${activeRide?.id}`, '1');
+          try { if (activeRide) await updateRideStatus(activeRide.id, 'completed'); } catch (_) {}
+          banner.classList.add('hidden');
+          syncBannerWithPanel();
+          activeRide = null;
+          stopRidePoll();
+          refreshRideButtonInPanel();
+          return; // ne pas appeler refreshRideButtonInPanel une 2e fois
+        }
+        refreshRideButtonInPanel();
+      }, 1000);
+
+      // Affichage immédiat sans attendre le premier tick
+      const initRemaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+      if (rbcNumber) rbcNumber.textContent = initRemaining;
+      driverEl.textContent = `📞 Appelez le chauffeur maintenant !`;
+      driverEl.style.color = '#16a34a';
+    }
   } else if (ride.status === 'rejected') {
     banner.className = 'ride-banner rejected';
     iconEl.textContent  = '❌';
     titleEl.textContent = 'Course refusée par le chauffeur';
     cancelBtn.textContent    = 'Fermer';
     cancelBtn.style.display  = '';
+    stopRidePoll();
     cancelBtn.onclick = () => {
       banner.classList.add('hidden');
-      syncBannerWithPanel();
       activeRide = null;
       refreshRideButtonInPanel();
     };
     notifyPassenger('rejected');
-    // Masquer automatiquement après 6 s si pas fermé manuellement
+    showRejectedModal();   // modale proéminente au-dessus de tout
+    // Masquer automatiquement après 8 s si pas fermé manuellement
     setTimeout(() => {
       if (activeRide?.status === 'rejected') {
         banner.classList.add('hidden');
-        syncBannerWithPanel();
         activeRide = null;
         refreshRideButtonInPanel();
       }
-    }, 6000);
+    }, 8000);
   }
 
-  driverEl.textContent = driverName;
+  // Pour accepted : le countdown gère driverEl, ne pas l'écraser avec le nom
+  if (ride.status !== 'accepted') {
+    driverEl.textContent = driverName;
+    driverEl.style.color = '';
+  }
   banner.classList.remove('hidden');
   syncBannerWithPanel();
 
@@ -424,21 +535,47 @@ function updateRideBanner(ride) {
   refreshRideButtonInPanel();
 }
 
-// Masque le bandeau quand le panneau est ouvert, le restaure à la fermeture
+// Masque le bandeau derrière le panel uniquement pour "pending" (le panel affiche déjà le bouton)
+// Pour "accepted" et "rejected" : toujours visible, le passager doit voir le countdown / la notif
 function syncBannerWithPanel() {
-  const panel     = document.getElementById('driver-panel');
-  const banner    = document.getElementById('ride-banner');
+  const panel  = document.getElementById('driver-panel');
+  const banner = document.getElementById('ride-banner');
   if (!panel || !banner) return;
 
+  const status           = activeRide?.status;
   const panelOpen        = panel.classList.contains('open');
-  const rideIsActive     = activeRide && (activeRide.status === 'pending' || activeRide.status === 'accepted');
   const rideIsThisDriver = activeRide && panel._currentDriverId === activeRide.driver_id;
 
-  if (panelOpen && rideIsThisDriver) {
+  if (panelOpen && rideIsThisDriver && status === 'pending') {
+    // Cacher uniquement quand en attente : le bouton dans le panel suffit
     banner.classList.add('hidden');
-  } else if (rideIsActive) {
+  } else if (status === 'pending' || status === 'accepted' || status === 'rejected') {
+    // Pour tous les autres statuts visibles : toujours montrer
     banner.classList.remove('hidden');
   }
+}
+
+// ── Modale de notification de refus ──────────────────────────
+function showRejectedModal() {
+  const modal   = document.getElementById('ride-rejected-modal');
+  const closeBtn = document.getElementById('ride-rejected-close');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+
+  function dismiss() {
+    modal.classList.add('hidden');
+    // Fermer aussi le panel chauffeur si ouvert
+    const panel = document.getElementById('driver-panel');
+    if (panel?.classList.contains('open')) {
+      panel.classList.remove('open');
+      syncBannerWithPanel();
+    }
+  }
+
+  closeBtn.onclick = dismiss;
+  // Fermer en cliquant sur le fond
+  modal.querySelector('.ride-rejected-backdrop').onclick = dismiss;
 }
 
 function refreshRideButtonInPanel() {
@@ -456,12 +593,10 @@ function renderRideButton(driver) {
   const el = document.getElementById('panel-ride-request');
   if (!el) return;
 
-  if (!isDriverConnected(driver)) { el.innerHTML = ''; return; }
-
   const passengerId = session?.telephone || session?.email;
   if (!passengerId) { el.innerHTML = ''; return; }
 
-  // Course active sur CE chauffeur
+  // Course active sur CE chauffeur — toujours afficher même si le chauffeur est indisponible
   if (activeRide && activeRide.driver_id === driver.id) {
     if (activeRide.status === 'pending') {
       el.innerHTML = `
@@ -495,6 +630,9 @@ function renderRideButton(driver) {
     return;
   }
 
+  // Aucune course active : vérifier que le chauffeur est bien connecté avant d'afficher le bouton
+  if (!isDriverConnected(driver)) { el.innerHTML = ''; return; }
+
   el.innerHTML = `
     <div class="ride-request-wrap">
       <button class="btn-request-ride" id="btn-request-ride-action">
@@ -513,6 +651,7 @@ function renderRideButton(driver) {
         passengerLng: userLng,
       });
       updateRideBanner(ride);
+      startRidePoll(ride.id); // polling toutes les 3s jusqu'à réponse du chauffeur
     } catch (err) {
       console.error('Erreur demande de course:', err);
       btn.disabled = false;
@@ -531,7 +670,14 @@ function renderWhatsAppCta(driver) {
   const ctaEl = document.getElementById('panel-cta');
   if (!ctaEl) return;
 
-  if (!isDriverConnected(driver)) {
+  if (!driver.telephone) { ctaEl.innerHTML = ''; return; }
+
+  const tel      = driver.telephone.replace(/\D/g, '');
+  const accepted = activeRide?.driver_id === driver.id && activeRide?.status === 'accepted';
+
+  // Si la course est acceptée avec CE chauffeur : afficher WhatsApp même s'il est marqué indisponible
+  // (il est indisponible exprès pendant la fenêtre de contact)
+  if (!accepted && !isDriverConnected(driver)) {
     const msg = driver.disponible
       ? '🔌 Ce chauffeur est hors ligne'
       : '❌ Ce chauffeur n\'est pas disponible';
@@ -543,11 +689,6 @@ function renderWhatsAppCta(driver) {
       </div>`;
     return;
   }
-
-  if (!driver.telephone) { ctaEl.innerHTML = ''; return; }
-
-  const tel      = driver.telephone.replace(/\D/g, '');
-  const accepted = activeRide?.driver_id === driver.id && activeRide?.status === 'accepted';
 
   if (accepted) {
     ctaEl.innerHTML = `
@@ -575,7 +716,7 @@ function openDriverPanel(driver) {
   const vehiculeDesc    = [driver.marque, driver.modele].filter(Boolean).join(' ') || '—';
   const couleurDesc     = [driver.couleur, driver.type_vehicule === 'moto' ? 'Moto' : driver.type_vehicule === 'car' ? 'Voiture' : null].filter(Boolean).join(' · ') || null;
 
-  document.getElementById('panel-photo').src           = driver.photo || 'https://i.pravatar.cc/150?img=0';
+  document.getElementById('panel-photo').src           = sanitizeUrl(driver.photo) || 'https://i.pravatar.cc/150?img=0';
   document.getElementById('panel-name').textContent    = driverFullName;
   document.getElementById('panel-plate').textContent   = driver.immatriculation || '—';
   document.getElementById('panel-vehicle').textContent = vehiculeDesc;
@@ -626,7 +767,7 @@ function initUserMenu(session) {
 
   // Avatar float + toutes les navs
   if (session.avatar_url) {
-    avatarEl.innerHTML = `<img src="${session.avatar_url}" alt="${session.prenom}" />`;
+    avatarEl.innerHTML = `<img src="${sanitizeUrl(session.avatar_url)}" alt="" />`;
   } else {
     avatarEl.textContent = (session.prenom || '?').charAt(0).toUpperCase();
   }
@@ -696,7 +837,7 @@ function setAvatarEl(el, session) {
   if (!el) return;
   const initiale = (session.prenom || '?').charAt(0).toUpperCase();
   if (session.avatar_url) {
-    el.innerHTML = `<img src="${session.avatar_url}" alt="${initiale}" />`;
+    el.innerHTML = `<img src="${sanitizeUrl(session.avatar_url)}" alt="" />`;
   } else {
     el.textContent = initiale;
   }
@@ -711,7 +852,7 @@ function setAllAvatars(session) {
 function setAvatarDisplay(url, initiale) {
   const el = document.getElementById('prof-avatar');
   if (url) {
-    el.innerHTML = `<img src="${url}" alt="Avatar" />`;
+    el.innerHTML = `<img src="${sanitizeUrl(url)}" alt="" />`;
   } else {
     el.textContent = initiale;
   }
@@ -914,7 +1055,7 @@ function startApp(s) {
             localStorage.setItem('pnr_passenger', JSON.stringify(session));
             // Mettre à jour float-avatar + navs maintenant que l'URL est chargée
             const floatEl = document.getElementById('float-avatar');
-            if (floatEl) floatEl.innerHTML = `<img src="${data.avatar_url}" alt="${session.prenom}" />`;
+            if (floatEl) floatEl.innerHTML = `<img src="${sanitizeUrl(data.avatar_url)}" alt="" />`;
             setAllAvatars(session);
             // Mettre à jour le marqueur sur la carte
             if (userMarker) userMarker.setIcon(makeUserIcon(data.avatar_url));
@@ -936,24 +1077,14 @@ function startApp(s) {
   const passengerId = session.telephone || session.email;
   if (passengerId && !isAdminSession(session)) {
     watchActiveRide(passengerId, updateRideBanner);
-
-    // Polling de secours : re-vérifie le statut de la course active toutes les 10 s
-    // pour rattraper les événements realtime éventuellement manqués
-    setInterval(async () => {
-      if (!activeRide || activeRide.status === 'rejected' || activeRide.status === 'cancelled') return;
-      const { data } = await supabase
-        .from('rides')
-        .select('*, drivers(*)')
-        .eq('id', activeRide.id)
-        .maybeSingle();
-      if (data && data.status !== activeRide.status) updateRideBanner(data);
-    }, 10_000);
   }
 }
 
 // ── Détection admin ──────────────────────────────────────────
-function isAdminSession(s) {
-  return s?.telephone === '+242050787624';
+// Vérification via la session admin posée automatiquement au login
+// Le numéro admin n'est jamais comparé côté frontend
+function isAdminSession(_s) {
+  return sessionStorage.getItem('pnr_admin') === 'authenticated';
 }
 
 function injectAdminNav() {

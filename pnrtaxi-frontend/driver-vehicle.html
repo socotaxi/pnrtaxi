@@ -985,31 +985,37 @@
       const permisPhotoUrl = await uploadPermisPhoto(session.telephone);
 
       // Enregistrement via RPC SECURITY DEFINER (contourne RLS INSERT)
+      // Le mot de passe est lu UNE SEULE FOIS puis effacé dans le bloc finally.
       const pendingPw = sessionStorage.getItem('pnr_driver_pending_pw') || '';
-      const { error } = await supabase.rpc('register_driver', {
-        p_telephone       : session.telephone,
-        p_prenom          : session.prenom,
-        p_nom             : session.nom,
-        p_photo           : photoUrl       || '',
-        p_type_vehicule   : selectedType,
-        p_marque          : marque,
-        p_modele          : modele,
-        p_couleur         : couleur,
-        p_immatriculation : plaque,
-        p_etat_vehicule   : selectedCondition,
-        p_cylindree       : cyl || '',
-        p_permis_pays     : pays,
-        p_permis_nom      : nom,
-        p_permis_prenom   : prenom,
-        p_permis_numero   : numero,
-        p_permis_date     : date || '',
-        p_permis_photo    : permisPhotoUrl || '',
-        p_password        : pendingPw,
-      });
+      let rpcError = null;
+      try {
+        const { error } = await supabase.rpc('register_driver', {
+          p_telephone       : session.telephone,
+          p_prenom          : session.prenom,
+          p_nom             : session.nom,
+          p_photo           : photoUrl       || '',
+          p_type_vehicule   : selectedType,
+          p_marque          : marque,
+          p_modele          : modele,
+          p_couleur         : couleur,
+          p_immatriculation : plaque,
+          p_etat_vehicule   : selectedCondition,
+          p_cylindree       : cyl || '',
+          p_permis_pays     : pays,
+          p_permis_nom      : nom,
+          p_permis_prenom   : prenom,
+          p_permis_numero   : numero,
+          p_permis_date     : date || '',
+          p_permis_photo    : permisPhotoUrl || '',
+          p_password        : pendingPw,
+        });
+        rpcError = error;
+      } finally {
+        // Toujours effacer le mot de passe, qu'il y ait erreur ou non
+        sessionStorage.removeItem('pnr_driver_pending_pw');
+      }
 
-      if (error) throw error;
-
-      sessionStorage.removeItem('pnr_driver_pending_pw');
+      if (rpcError) throw rpcError;
       window.location.replace('driver.html');
 
     } catch (err) {
@@ -1022,6 +1028,12 @@
 </script>
 
 <script>
+  // Effacer le mot de passe temporaire si l'utilisateur quitte la page
+  // sans terminer l'inscription (navigation arrière, fermeture onglet…)
+  window.addEventListener('pagehide', () => {
+    sessionStorage.removeItem('pnr_driver_pending_pw');
+  });
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js')
       .catch(err => console.warn('SW error:', err));
