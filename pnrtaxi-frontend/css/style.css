@@ -401,7 +401,7 @@ html, body {
   right: 0;
   background: var(--bg-primary);
   border-radius: 24px 24px 0 0;
-  padding: 0 20px calc(36px + env(safe-area-inset-bottom));
+  padding: 0 20px 0;
   z-index: 500;
   transform: translateY(100%);
   transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
@@ -409,6 +409,8 @@ html, body {
   max-height: 82dvh;
   overflow-y: auto;
   border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
 }
 
 #driver-panel.open { transform: translateY(0); }
@@ -551,6 +553,16 @@ html, body {
   border: 1px solid var(--brand-200);
 }
 
+/* ── CTA sticky en bas du panneau ── */
+#panel-cta {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-primary);
+  padding: 12px 0 calc(16px + env(safe-area-inset-bottom));
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
 /* ── Rangée des boutons d'appel ── */
 .cta-call-row {
   display: flex;
@@ -559,70 +571,60 @@ html, body {
 
 .cta-lock-hint {
   text-align: center;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
-/* ── Bouton Appel direct ── */
-.btn-call-direct {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex: 1;
-  padding: 14px 10px;
-  border-radius: 14px;
-  border: none;
-  background: var(--brand-600);
-  color: #fff;
-  font-size: 0.88rem;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background var(--transition), transform 0.12s;
-  box-shadow: 0 4px 16px rgba(79,70,229,0.3);
-}
-
-.btn-call-direct:hover  { background: var(--brand-700); }
-.btn-call-direct:active { transform: scale(0.97); box-shadow: none; }
-.btn-call-direct:disabled,
-.btn-call-direct[disabled] {
-  background: #9ca3af;
-  box-shadow: none;
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-/* ── Bouton WhatsApp ── */
+/* Base commune aux deux boutons d'appel */
+.btn-call-direct,
 .btn-whatsapp {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   flex: 1;
-  padding: 14px 10px;
+  min-width: 0;
+  padding: 13px 8px;
   border-radius: 14px;
   border: none;
   text-decoration: none;
   cursor: pointer;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: #fff;
-  background: var(--green);
+  white-space: nowrap;
   transition: background var(--transition), transform 0.12s, box-shadow 0.2s;
-  box-shadow: 0 4px 20px rgba(16,185,129,0.3);
 }
 
+.btn-call-direct svg,
+.btn-whatsapp svg { flex-shrink: 0; }
+
+/* ── Appel direct (indigo) ── */
+.btn-call-direct {
+  background: var(--brand-600);
+  box-shadow: 0 4px 14px rgba(79,70,229,0.28);
+}
+.btn-call-direct:hover  { background: var(--brand-700); }
+.btn-call-direct:active { transform: scale(0.97); box-shadow: none; }
+
+/* ── WhatsApp (vert) ── */
+.btn-whatsapp {
+  background: var(--green);
+  box-shadow: 0 4px 14px rgba(16,185,129,0.28);
+}
 .btn-whatsapp:hover  { background: var(--green-dark); }
 .btn-whatsapp:active { transform: scale(0.97); box-shadow: none; }
 
+/* État désactivé commun */
+.btn-call-direct:disabled,
+.btn-call-direct[disabled],
 .btn-whatsapp:disabled,
 .btn-whatsapp[disabled] {
-  background: #9ca3af;
+  background: #d1d5db;
   box-shadow: none;
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.7;
 }
 
 /* ============================================================
@@ -3516,7 +3518,17 @@ html, body {
 
 /* ── Avis dans le panneau chauffeur ──────────────────────── */
 .panel-ratings-section {
-  margin: 12px 0 4px;
+  margin: 12px 0 16px;
+}
+
+/* Zone scrollable du panneau (tout sauf le CTA sticky) */
+#driver-panel .panel-handle,
+#driver-panel .dp-header,
+#driver-panel .dp-chips,
+#driver-panel .dp-plate-row,
+#driver-panel .panel-ratings-section,
+#driver-panel #panel-ride-request {
+  flex-shrink: 0;
 }
 
 .review-toggle {
