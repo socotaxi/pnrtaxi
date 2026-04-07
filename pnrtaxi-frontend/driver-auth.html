@@ -524,36 +524,8 @@
 
 </div><!-- /auth-overlay -->
 
-<script type="module">
-  import { initDriverAuth } from './js/driver-auth.js';
-
-  const params   = new URLSearchParams(location.search);
-  const isSignup = params.get('m') === 'signup';
-
-  const chip    = document.getElementById('mode-chip');
-  const toggle  = document.getElementById('auth-mode-toggle');
-  const titleEl = document.getElementById('screen-phone-title');
-  const subEl   = document.getElementById('screen-phone-subtitle');
-
-  if (isSignup) {
-    chip.textContent    = 'Inscription';
-    titleEl.textContent = 'Créer votre compte chauffeur';
-    subEl.textContent   = "Entrez votre numéro pour créer votre compte chauffeur";
-    toggle.innerHTML    = 'Déjà un compte ? <a href="driver-auth.html">Se connecter</a>';
-  } else {
-    chip.textContent = 'Connexion';
-    toggle.innerHTML = "Pas encore de compte ? <a href='driver-auth.html?m=signup'>S'inscrire gratuitement</a>";
-  }
-
-  initDriverAuth();
-</script>
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js')
-      .catch(err => console.warn('SW error:', err));
-  }
-</script>
+<script type="module" src="js/driver-auth-init.js"></script>
+<script src="js/sw-register.js"></script>
 
 </body>
 </html>

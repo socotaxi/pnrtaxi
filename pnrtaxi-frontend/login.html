@@ -629,42 +629,8 @@
 
 </div><!-- /auth-overlay -->
 
-<script type="module">
-  import { initAuth, getSession } from './js/auth.js';
-
-  // ── Mode login vs signup ─────────────────────────────────────
-  const params  = new URLSearchParams(location.search);
-  const isSignup = params.get('m') === 'signup';
-
-  const chip     = document.getElementById('mode-chip');
-  const toggle   = document.getElementById('auth-mode-toggle');
-  const titleEl  = document.getElementById('screen-phone-title');
-  const subEl    = document.getElementById('screen-phone-subtitle');
-  const pageTitle = document.querySelector('title');
-
-  if (isSignup) {
-    chip.textContent       = 'Inscription';
-    titleEl.textContent    = 'Créer votre compte';
-    subEl.textContent      = 'Entrez votre numéro pour recevoir un code d\'activation';
-    pageTitle.textContent  = 'PNR Taxi — Créer un compte';
-    toggle.innerHTML       = 'Déjà un compte ? <a href="login.html">Se connecter</a>';
-  } else {
-    chip.textContent    = 'Connexion';
-    toggle.innerHTML    = 'Pas encore de compte ? <a href="login.html?m=signup">Créer un compte gratuit</a>';
-  }
-
-  // ── Auth — redirige vers l'app au succès ─────────────────────
-  initAuth(() => {
-    window.location.replace('passenger.html');
-  });
-</script>
-
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js')
-      .catch(err => console.warn('SW error:', err));
-  }
-</script>
+<script type="module" src="js/login-init.js"></script>
+<script src="js/sw-register.js"></script>
 
 </body>
 </html>
