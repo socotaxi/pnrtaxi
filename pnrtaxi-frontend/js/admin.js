@@ -190,6 +190,7 @@ async function showDashboard() {
   setupTabs();
   setupGrantModal();
   setupAuditRefresh();
+  setupCollapsibles();
 
   // Chargement des données (chacun gère ses propres erreurs)
   try { await loadConfig(); } catch(_) {}
@@ -201,6 +202,10 @@ async function showDashboard() {
   try { await loadDrivers(); } catch(_) {
     var w2 = document.getElementById('drivers-table-wrap');
     if (w2) w2.innerHTML = '<div class="table-empty"><div>Erreur de chargement des chauffeurs</div></div>';
+  }
+  try { await loadPassengers(); } catch(_) {
+    var w3 = document.getElementById('passengers-table-wrap');
+    if (w3) w3.innerHTML = '<div class="table-empty"><div>Erreur de chargement des passagers</div></div>';
   }
   try { await loadAuditLog(); } catch(_) {}
 
@@ -636,6 +641,112 @@ async function disableDriverAccess(driverId) {
     showSnackbar('Accès révoqué');
     await refreshAll();
   }
+}
+
+// ── Liste des passagers ───────────────────────────────────────
+var passengersTotal = 0;
+var allPassengers   = [];
+var passengersPage  = 0;
+
+async function loadPassengers() {
+  var wrap = document.getElementById('passengers-table-wrap');
+  if (!wrap) return;
+
+  var from = passengersPage * PAGE_SIZE;
+  var to   = from + PAGE_SIZE - 1;
+
+  var res = await sb
+    .from('passengers')
+    .select('id, telephone, prenom, email, auth_provider, avatar_url, verified, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (res.error || !res.data) {
+    wrap.innerHTML = '<div class="table-empty"><div>Erreur de chargement des passagers</div></div>';
+    return;
+  }
+
+  passengersTotal = res.count ?? 0;
+  allPassengers   = res.data;
+
+  var badge = document.getElementById('passengers-count-badge');
+  if (badge) badge.textContent = passengersTotal;
+
+  renderPassengersTable();
+}
+
+function renderPassengersTable() {
+  var wrap = document.getElementById('passengers-table-wrap');
+  if (!wrap) return;
+
+  if (allPassengers.length === 0) {
+    wrap.innerHTML = '<div class="table-empty"><div class="table-empty-icon">👤</div><div>Aucun passager inscrit</div></div>';
+    return;
+  }
+
+  var rows = allPassengers.map(renderPassengerRow).join('');
+  wrap.innerHTML = '<div class="table-scroll"><table class="data-table"><thead><tr><th>Passager</th><th>Contact</th><th>Inscription</th><th>Vérifié</th><th>Date</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+    + buildPagination(passengersPage, passengersTotal, 'passengers-prev', 'passengers-next');
+
+  var pp = document.getElementById('passengers-prev');
+  var pn = document.getElementById('passengers-next');
+  if (pp) pp.addEventListener('click', function () { passengersPage--; loadPassengers(); });
+  if (pn) pn.addEventListener('click', function () { passengersPage++; loadPassengers(); });
+}
+
+function renderPassengerRow(p) {
+  var name     = escapeHtml(p.prenom || '—');
+  var initiale = escapeHtml((p.prenom || '?').charAt(0).toUpperCase());
+  var avatar   = p.avatar_url
+    ? '<img src="' + escapeHtml(p.avatar_url) + '" alt="' + name + '" />'
+    : initiale;
+
+  var contact = p.telephone
+    ? escapeHtml(p.telephone)
+    : escapeHtml(p.email || '—');
+
+  var provider = '';
+  if (p.auth_provider === 'google') {
+    provider = '<span class="op-badge" style="background:#e8f0fe;color:#1a73e8">🔵 Google</span>';
+  } else if (p.auth_provider) {
+    provider = '<span class="op-badge" style="background:#f1f5f9;color:var(--muted)">' + escapeHtml(p.auth_provider) + '</span>';
+  } else {
+    provider = '<span class="op-badge" style="background:#f1f5f9;color:var(--muted)">📱 Téléphone</span>';
+  }
+
+  var verified = p.verified
+    ? '<span class="badge badge--green">✓ Oui</span>'
+    : '<span class="badge" style="background:#f1f5f9;color:var(--muted);border:1px solid var(--border)">Non</span>';
+
+  return '<tr>'
+    + '<td><div class="driver-cell"><div class="driver-avatar">' + avatar + '</div><div><div class="driver-name">' + name + '</div></div></div></td>'
+    + '<td data-label="Contact" style="font-size:.82rem">' + contact + '</td>'
+    + '<td data-label="Inscription">' + provider + '</td>'
+    + '<td data-label="Vérifié">' + verified + '</td>'
+    + '<td data-label="Date" style="font-size:.78rem;color:var(--muted)">' + formatDate(p.created_at) + '</td>'
+    + '</tr>';
+}
+
+// ── Sections rétractables ────────────────────────────────────
+function setupCollapsibles() {
+  document.querySelectorAll('.collapsible-header').forEach(function (header) {
+    var targetId = header.dataset.target;
+    var body     = document.getElementById(targetId);
+    var btn      = header.querySelector('.collapse-btn');
+    if (!body || !btn) return;
+
+    body.classList.add('collapsible-body');
+
+    header.addEventListener('click', function (e) {
+      // Ne pas déclencher si on clique sur un badge ou bouton interne autre que collapse-btn
+      if (e.target.closest('.badge') && !e.target.closest('.collapse-btn')) return;
+
+      var isCollapsed = body.classList.toggle('collapsed');
+      btn.classList.toggle('collapsed', isCollapsed);
+      btn.setAttribute('aria-expanded', String(!isCollapsed));
+      btn.title = isCollapsed ? 'Déplier' : 'Réduire';
+    });
+  });
 }
 
 // ── Temps réel ────────────────────────────────────────────────

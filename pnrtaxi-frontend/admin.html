@@ -722,6 +722,38 @@
       text-align: center;
     }
 
+    /* ── Collapse ── */
+    .collapsible-header { cursor: pointer; user-select: none; }
+    .collapsible-header:hover { background: #fafbff; }
+
+    .collapse-btn {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: var(--brand-50);
+      color: var(--brand-600);
+      border: 1px solid var(--brand-200);
+      font-size: 0.7rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.25s, background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .collapse-btn:hover { background: var(--brand-100); }
+
+    .collapse-btn.collapsed { transform: rotate(180deg); }
+
+    .collapsible-body {
+      overflow: hidden;
+      transition: max-height 0.3s ease, opacity 0.25s ease;
+      max-height: 2000px;
+      opacity: 1;
+    }
+
+    .collapsible-body.collapsed {
+      max-height: 0;
+      opacity: 0;
+    }
+
   </style>
 </head>
 <body>
@@ -907,23 +939,45 @@
     <!-- ── Tous les chauffeurs ── -->
     <div class="section-title">Chauffeurs</div>
     <div class="table-card">
-      <div class="table-header">
+      <div class="table-header collapsible-header" data-target="drivers-collapsible">
         <div class="table-header-title">Liste des chauffeurs</div>
-        <span class="badge badge--blue" id="drivers-count-badge">0</span>
-      </div>
-
-      <!-- Tabs filtre -->
-      <div style="padding:16px 20px 0">
-        <div class="tabs">
-          <button class="tab active" data-filter="all">Tous</button>
-          <button class="tab" data-filter="actif">Actifs</button>
-          <button class="tab" data-filter="gratuit">Gratuit</button>
-          <button class="tab" data-filter="expire">Expirés</button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="badge badge--blue" id="drivers-count-badge">0</span>
+          <button class="collapse-btn" id="drivers-collapse-btn" aria-expanded="true" title="Réduire">▲</button>
         </div>
       </div>
 
-      <div id="drivers-table-wrap">
-        <div class="table-loading"><div class="spinner-sm"></div></div>
+      <div id="drivers-collapsible">
+        <!-- Tabs filtre -->
+        <div style="padding:16px 20px 0">
+          <div class="tabs">
+            <button class="tab active" data-filter="all">Tous</button>
+            <button class="tab" data-filter="actif">Actifs</button>
+            <button class="tab" data-filter="gratuit">Gratuit</button>
+            <button class="tab" data-filter="expire">Expirés</button>
+          </div>
+        </div>
+
+        <div id="drivers-table-wrap">
+          <div class="table-loading"><div class="spinner-sm"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Liste des passagers ── -->
+    <div class="section-title">Passagers</div>
+    <div class="table-card">
+      <div class="table-header collapsible-header" data-target="passengers-collapsible">
+        <div class="table-header-title">Liste des passagers</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="badge badge--blue" id="passengers-count-badge">0</span>
+          <button class="collapse-btn" id="passengers-collapse-btn" aria-expanded="true" title="Réduire">▲</button>
+        </div>
+      </div>
+      <div id="passengers-collapsible">
+        <div id="passengers-table-wrap">
+          <div class="table-loading"><div class="spinner-sm"></div></div>
+        </div>
       </div>
     </div>
 

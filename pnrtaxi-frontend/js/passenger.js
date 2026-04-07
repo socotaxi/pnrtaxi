@@ -6,6 +6,7 @@ import { supabase } from './supabase-config.js';
 import { haversineDistance, formatDistance } from './haversine.js';
 import { initAuth, clearSession } from './auth.js';
 import { requestRide, updateRideStatus, watchActiveRide } from './rides.js';
+import { showRatingModal, getDriverRatingInfo, getDriverReviews } from './ratings.js';
 
 // ── Sécurité : sanitize URL pour attributs src/href ──────────
 // Autorise uniquement https:// et les blob: locaux (aperçu avatar)
@@ -399,7 +400,7 @@ function updateRideBanner(ride) {
   const dismissedKey = ride ? `dismissed_ride_${ride.id}` : null;
   const isDismissed  = dismissedKey && localStorage.getItem(dismissedKey);
 
-  if (!ride || ride.status === 'cancelled' || ride.status === 'completed' || isDismissed) {
+  if (!ride || ride.status === 'cancelled' || isDismissed) {
     banner.className = 'ride-banner hidden';
     activeRide = null;
     stopRidePoll();
@@ -407,6 +408,28 @@ function updateRideBanner(ride) {
     const rbcBox = document.getElementById('rbc-box');
     if (rbcBox) rbcBox.style.display = 'none';
     syncBannerWithPanel();
+    return;
+  }
+
+  // Course terminée par le chauffeur (realtime) → modale de notation
+  if (ride.status === 'completed') {
+    banner.className = 'ride-banner hidden';
+    activeRide = null;
+    stopRidePoll();
+    if (contactCountdown) { clearInterval(contactCountdown); contactCountdown = null; }
+    const rbcBox2 = document.getElementById('rbc-box');
+    if (rbcBox2) rbcBox2.style.display = 'none';
+    syncBannerWithPanel();
+    const driverName = ride.drivers
+      ? [ride.drivers.prenom, ride.drivers.nom].filter(Boolean).join(' ') || ride.driver_id
+      : ride.driver_id;
+    showRatingModal({
+      title:    'Course terminée !',
+      subtitle: `Comment était ${driverName} ?`,
+      rideId:   ride.id,
+      fromRole: 'passenger',
+      toId:     ride.driver_id,
+    });
     return;
   }
 
@@ -450,6 +473,17 @@ function updateRideBanner(ride) {
       syncBannerWithPanel();
       activeRide = null;
       refreshRideButtonInPanel();
+      // Modale de notation chauffeur
+      const driverName = ride.drivers
+        ? [ride.drivers.prenom, ride.drivers.nom].filter(Boolean).join(' ') || ride.driver_id
+        : ride.driver_id;
+      showRatingModal({
+        title:    'Course terminée !',
+        subtitle: `Comment était ${driverName} ?`,
+        rideId:   ride.id,
+        fromRole: 'passenger',
+        toId:     ride.driver_id,
+      });
     };
 
     // ── Countdown fenêtre de contact (grand affichage) ───────
@@ -481,13 +515,27 @@ function updateRideBanner(ride) {
           clearInterval(contactCountdown); contactCountdown = null;
           if (rbcBox) rbcBox.style.display = 'none';
           // Fermer automatiquement la bannière et marquer la course comme terminée
-          localStorage.setItem(`dismissed_ride_${activeRide?.id}`, '1');
-          try { if (activeRide) await updateRideStatus(activeRide.id, 'completed'); } catch (_) {}
+          const completedRide = activeRide;
+          localStorage.setItem(`dismissed_ride_${completedRide?.id}`, '1');
+          try { if (completedRide) await updateRideStatus(completedRide.id, 'completed'); } catch (_) {}
           banner.classList.add('hidden');
           syncBannerWithPanel();
           activeRide = null;
           stopRidePoll();
           refreshRideButtonInPanel();
+          // Modale de notation chauffeur
+          if (completedRide) {
+            const driverName = completedRide.drivers
+              ? [completedRide.drivers.prenom, completedRide.drivers.nom].filter(Boolean).join(' ') || completedRide.driver_id
+              : completedRide.driver_id;
+            showRatingModal({
+              title:    'Course terminée !',
+              subtitle: `Comment était ${driverName} ?`,
+              rideId:   completedRide.id,
+              fromRole: 'passenger',
+              toId:     completedRide.driver_id,
+            });
+          }
           return; // ne pas appeler refreshRideButtonInPanel une 2e fois
         }
         refreshRideButtonInPanel();
@@ -724,6 +772,17 @@ function openDriverPanel(driver) {
   const colorEl = document.getElementById('panel-color');
   if (colorEl) colorEl.textContent = couleurDesc || '—';
 
+  const climEl = document.getElementById('panel-clim');
+  if (climEl) {
+    if (driver.climatisation === true) {
+      climEl.innerHTML = '<span style="color:#0891b2;font-weight:600">❄️ Climatisée</span>';
+    } else if (driver.climatisation === false) {
+      climEl.innerHTML = '<span style="color:#64748b;font-weight:600">🚫❄️ Non climatisée</span>';
+    } else {
+      climEl.textContent = '—';
+    }
+  }
+
   // Distance
   const distEl = document.getElementById('panel-distance');
   distEl.textContent = (userLat !== null && driver.lat && driver.lng)
@@ -739,8 +798,73 @@ function openDriverPanel(driver) {
   renderWhatsAppCta(driver);
   renderRideButton(driver);
 
+  // Note moyenne + avis (chargement asynchrone)
+  renderDriverRating(driver.id);
+
   panel.classList.add('open');
   syncBannerWithPanel();
+}
+
+function starsHtml(avg, count) {
+  if (!avg || count === 0) return '<span style="color:var(--text-muted);font-size:0.8rem">Pas encore noté</span>';
+  const full  = Math.floor(avg);
+  const half  = avg - full >= 0.4 ? 1 : 0;
+  const empty = 5 - full - half;
+  const stars = '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(empty);
+  return `<span style="color:#f59e0b">${stars}</span> <span style="color:var(--text-muted);font-size:0.78rem">${Number(avg).toFixed(1)} · ${count} avis</span>`;
+}
+
+async function renderDriverRating(driverId) {
+  const starsEl   = document.getElementById('panel-stars');
+  const ratingsEl = document.getElementById('panel-ratings');
+  if (!starsEl || !ratingsEl) return;
+
+  starsEl.innerHTML   = '<span style="color:var(--text-muted);font-size:0.8rem">…</span>';
+  ratingsEl.innerHTML = '';
+
+  const [info, reviews] = await Promise.all([
+    getDriverRatingInfo(driverId),
+    getDriverReviews(driverId, 5),
+  ]);
+
+  starsEl.innerHTML = starsHtml(info.rating_avg, info.rating_count);
+
+  if (reviews.length === 0) return;
+
+  const items = reviews.map(r => {
+    const date  = new Date(r.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const stars = '★'.repeat(r.score) + '☆'.repeat(5 - r.score);
+    return `
+      <div class="review-item">
+        <div class="review-header">
+          <span class="review-stars">${stars}</span>
+          <span class="review-date">${date}</span>
+        </div>
+        <p class="review-comment">${r.comment}</p>
+      </div>`;
+  }).join('');
+
+  ratingsEl.innerHTML = `
+    <button class="review-toggle" aria-expanded="false" aria-controls="review-list">
+      <span class="review-toggle-label">Voir les avis (${reviews.length})</span>
+      <svg class="review-toggle-chevron" width="16" height="16" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+    <div class="review-list" id="review-list" hidden>
+      ${items}
+    </div>`;
+
+  ratingsEl.querySelector('.review-toggle').addEventListener('click', function () {
+    const list     = document.getElementById('review-list');
+    const expanded = this.getAttribute('aria-expanded') === 'true';
+    this.setAttribute('aria-expanded', String(!expanded));
+    this.querySelector('.review-toggle-label').textContent =
+      expanded ? `Voir les avis (${reviews.length})` : `Masquer les avis`;
+    list.hidden = expanded;
+  });
 }
 
 function closeDriverPanel() {

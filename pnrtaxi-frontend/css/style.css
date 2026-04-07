@@ -3469,3 +3469,260 @@ html, body {
   color: var(--red-dark);
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
+
+/* ── Note chauffeur dans le dashboard ────────────────────── */
+.dash-rating {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 2px;
+  min-height: 1.1em;
+}
+
+/* ── Avis dans le panneau chauffeur ──────────────────────── */
+.panel-ratings-section {
+  margin: 12px 0 4px;
+}
+
+.review-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: background 0.2s;
+  margin-bottom: 0;
+}
+
+.review-toggle:hover { background: var(--brand-50); }
+
+.review-toggle-chevron {
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+  color: var(--text-muted);
+}
+
+.review-toggle[aria-expanded="true"] .review-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.review-list {
+  margin-top: 8px;
+}
+
+.review-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.review-item {
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.review-stars {
+  color: #f59e0b;
+  font-size: 0.82rem;
+  letter-spacing: 1px;
+}
+
+.review-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.review-comment {
+  font-size: 0.83rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* ── Modale d'évaluation ──────────────────────────────────── */
+.rating-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+  animation: fadeInOverlay 0.2s ease;
+}
+
+.rating-modal-overlay.hidden {
+  display: none;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.rating-modal-card {
+  background: var(--bg-card);
+  border-radius: 24px 24px 0 0;
+  padding: 28px 24px 32px;
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+  animation: slideUpCard 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUpCard {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0);    }
+}
+
+.rating-modal-icon {
+  font-size: 2.8rem;
+  margin-bottom: 10px;
+}
+
+.rating-modal-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.rating-modal-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+/* Étoiles */
+.rating-stars {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.rating-star {
+  background: none;
+  border: none;
+  font-size: 2.4rem;
+  color: #d1d5db;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.rating-star:hover,
+.rating-star.active {
+  color: #f59e0b;
+}
+
+.rating-star:active {
+  transform: scale(0.88);
+}
+
+/* Commentaire */
+.rating-comment-input {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  resize: none;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 20px;
+}
+
+.rating-comment-input:focus {
+  border-color: var(--brand-500);
+}
+
+/* Boutons d'action */
+.rating-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-rating-skip {
+  flex: 1;
+  padding: 13px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-rating-skip:hover {
+  background: var(--bg-secondary);
+}
+
+.btn-rating-submit {
+  flex: 2;
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  background: var(--brand-600);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.btn-rating-submit:disabled {
+  background: var(--brand-200);
+  cursor: not-allowed;
+}
+
+.btn-rating-submit:not(:disabled):hover {
+  background: var(--brand-700);
+}
+
+/* Bouton "Terminer la course" dans la ride-card */
+.btn-complete {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.btn-complete:hover   { background: var(--green-dark); }
+.btn-complete:disabled { opacity: 0.55; cursor: not-allowed; }

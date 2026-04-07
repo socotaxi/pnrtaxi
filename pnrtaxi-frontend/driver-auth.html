@@ -268,6 +268,21 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    /* ── Hint longueur mot de passe ── */
+    .pw-hint {
+      font-size: 0.76rem;
+      color: #94a3b8;
+      margin-top: 5px;
+      margin-bottom: 2px;
+      padding-left: 2px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: color 0.2s;
+    }
+    .pw-hint.ok    { color: #10b981; }
+    .pw-hint.error { color: #ef4444; }
+
     /* ── Avertissement mémorisation mot de passe ── */
     .pw-reminder {
       background: #fffbeb;
@@ -447,6 +462,7 @@
             </svg>
           </button>
         </div>
+        <div class="pw-hint" id="pw-length-hint">🔒 Minimum 8 caractères</div>
 
         <div class="pw-wrapper">
           <input

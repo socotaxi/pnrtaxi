@@ -172,6 +172,23 @@
       color: var(--brand-700); box-shadow: 0 0 0 3px var(--brand-100);
     }
 
+    /* ── Icône barrée (non climatisé) ── */
+    .icon-crossed {
+      position: relative;
+      display: inline-block;
+      line-height: 1;
+    }
+    .icon-crossed::after {
+      content: '';
+      position: absolute;
+      left: -1px; right: -1px;
+      top: 50%; height: 2.5px;
+      background: currentColor;
+      border-radius: 2px;
+      transform: rotate(-45deg);
+      opacity: 0.85;
+    }
+
     /* ── Hint de validation permis ── */
     .field-hint {
       font-size: 0.74rem;
@@ -455,6 +472,15 @@
           <div class="condition-toggle">
             <button class="cond-btn" id="btn-neuf" type="button">✨ Neuf</button>
             <button class="cond-btn" id="btn-occasion" type="button">🔄 Occasion</button>
+          </div>
+        </div>
+
+        <!-- Climatisation -->
+        <div class="field-group">
+          <label class="field-label">Climatisation</label>
+          <div class="condition-toggle">
+            <button class="cond-btn" id="btn-clim-oui" type="button">❄️ Climatisée</button>
+            <button class="cond-btn" id="btn-clim-non" type="button"><span class="icon-crossed">❄️</span> Non climatisée</button>
           </div>
         </div>
 

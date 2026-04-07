@@ -6,6 +6,7 @@ import { supabase } from './supabase-config.js';
 import { updateRideStatus, watchIncomingRides, loadDriverRideHistory } from './rides.js';
 import { initPaymentModal, checkDriverAccess } from './payment.js';
 import { haversineDistance, formatDistance } from './haversine.js';
+import { getDriverRatingInfo } from './ratings.js';
 
 const CONTACT_WINDOW_S = 30; // secondes d'indisponibilité après acceptation
 
@@ -104,6 +105,18 @@ async function loadDashboard() {
   document.getElementById('dash-photo').alt           = `Photo de ${displayName}`;
   document.getElementById('dash-name').textContent    = displayName;
   document.getElementById('dash-plate').textContent   = `${currentDriver.immatriculation || '—'} · ${vehiculeDesc}`;
+
+  // Note moyenne (chargement asynchrone sans bloquer le reste)
+  getDriverRatingInfo(currentPhone).then(info => {
+    const el = document.getElementById('dash-rating');
+    if (!el) return;
+    if (!info.rating_avg || info.rating_count === 0) {
+      el.textContent = '';
+      return;
+    }
+    const avg = Number(info.rating_avg).toFixed(1);
+    el.innerHTML = `<span style="color:#f59e0b">★</span> ${avg} <span style="color:var(--text-muted);font-size:0.75rem">(${info.rating_count} avis)</span>`;
+  });
 
   renderToggle();
   updateNavAvatars();
@@ -716,6 +729,14 @@ function renderActiveRide() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           Refuser
         </button>
+      </div>`
+    : ride.status === 'accepted' ? `
+      <div class="ride-card-divider"></div>
+      <div class="ride-card-actions">
+        <button class="btn-complete" data-id="${ride.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Terminer la course
+        </button>
       </div>` : '';
 
     // Countdown côté chauffeur pour les courses acceptées
@@ -761,6 +782,9 @@ function renderActiveRide() {
   });
   container.querySelectorAll('.btn-reject').forEach(btn => {
     btn.addEventListener('click', () => handleRideAction(btn.dataset.id, 'rejected'));
+  });
+  container.querySelectorAll('.btn-complete').forEach(btn => {
+    btn.addEventListener('click', () => handleCompleteRide(btn.dataset.id));
   });
 }
 
@@ -933,6 +957,32 @@ async function handleRideAction(rideId, status) {
     renderHistory();
   } catch (err) {
     console.error('Erreur mise à jour course:', err);
+    if (card) card.querySelectorAll('button').forEach(b => { b.disabled = false; });
+  }
+}
+
+async function handleCompleteRide(rideId) {
+  const card = document.querySelector(`[data-ride-id="${rideId}"]`);
+  if (card) card.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  try {
+    await updateRideStatus(rideId, 'completed');
+    const ride = ridesMap.get(rideId);
+    if (ride) { ride.status = 'completed'; ridesMap.set(rideId, ride); }
+
+    // Arrêter le countdown de contact
+    if (driverCountdownTimer) { clearInterval(driverCountdownTimer); driverCountdownTimer = null; }
+    driverCountdownEndAt = null;
+
+    // Remettre le chauffeur disponible
+    isAvailable = true;
+    await supabase.from('drivers').update({ disponible: true }).eq('id', currentPhone);
+    renderToggle();
+
+    renderActiveRide();
+    renderHistory();
+    removePassengerMarker();
+  } catch (err) {
+    console.error('Erreur terminaison course:', err);
     if (card) card.querySelectorAll('button').forEach(b => { b.disabled = false; });
   }
 }

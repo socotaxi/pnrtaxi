@@ -383,6 +383,21 @@ export async function initAuth(onComplete) {
 
     btnStart.disabled = !(namesOk && pwOk);
 
+    // Hint longueur
+    const hint = document.getElementById('pw-length-hint');
+    if (hint && pw.length > 0) {
+      if (pw.length >= 8) {
+        hint.className = 'pw-hint ok';
+        hint.textContent = '✓ Longueur suffisante';
+      } else {
+        hint.className = 'pw-hint error';
+        hint.textContent = '🔒 Minimum 8 caractères (' + pw.length + '/8)';
+      }
+    } else if (hint) {
+      hint.className = 'pw-hint';
+      hint.textContent = '🔒 Minimum 8 caractères';
+    }
+
     // Indicateur visuel si les mots de passe ne correspondent pas
     if (signupPwConfirm && confirm.length > 0 && pw !== confirm) {
       signupPwConfirm.style.borderColor = 'var(--red, #ef4444)';

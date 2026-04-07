@@ -80,6 +80,7 @@ function showError(elId, msg) {
 // ══════════════════════════════════════════════════════════════
 let selectedType      = null;
 let selectedCondition = null;
+let selectedClim      = null;
 
 const btnCar  = document.getElementById('btn-type-car');
 const btnMoto = document.getElementById('btn-type-moto');
@@ -152,6 +153,20 @@ document.getElementById('btn-occasion').addEventListener('click', () => {
   checkDetailsReady();
 });
 
+// Climatisation
+document.getElementById('btn-clim-oui').addEventListener('click', () => {
+  selectedClim = 'oui';
+  document.getElementById('btn-clim-oui').classList.add('selected');
+  document.getElementById('btn-clim-non').classList.remove('selected');
+  checkDetailsReady();
+});
+document.getElementById('btn-clim-non').addEventListener('click', () => {
+  selectedClim = 'non';
+  document.getElementById('btn-clim-non').classList.add('selected');
+  document.getElementById('btn-clim-oui').classList.remove('selected');
+  checkDetailsReady();
+});
+
 const detailsRequired = ['v-marque', 'v-modele', 'v-couleur', 'v-plaque'];
 const btnNextDetails  = document.getElementById('btn-next-details');
 
@@ -160,7 +175,7 @@ function checkDetailsReady() {
     const el = document.getElementById(id);
     return el && el.value.trim().length > 0;
   });
-  btnNextDetails.disabled = !filled || !selectedCondition;
+  btnNextDetails.disabled = !filled || !selectedCondition || !selectedClim;
 }
 
 detailsRequired.forEach(id => {
@@ -356,6 +371,7 @@ btnSaveAll.addEventListener('click', async () => {
         p_couleur         : couleur,
         p_immatriculation : plaque,
         p_etat_vehicule   : selectedCondition,
+        p_climatisation   : selectedClim === 'oui',
         p_cylindree       : cyl || '',
         p_permis_pays     : pays,
         p_permis_nom      : nom,
