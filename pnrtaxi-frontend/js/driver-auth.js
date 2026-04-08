@@ -1,5 +1,5 @@
 // ============================================================
-//  driver-auth.js — Authentification chauffeur PNR Taxi
+//  driver-auth.js — Authentification chauffeur PicknRide
 //  Flow téléphone : Numéro → lookup → mot de passe OU inscription
 // ============================================================
 

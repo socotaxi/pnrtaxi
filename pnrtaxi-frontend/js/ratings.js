@@ -1,5 +1,5 @@
 // ============================================================
-//  ratings.js — Système d'évaluation PNR Taxi
+//  ratings.js — Système d'évaluation PicknRide
 // ============================================================
 
 import { supabase } from './supabase-config.js';

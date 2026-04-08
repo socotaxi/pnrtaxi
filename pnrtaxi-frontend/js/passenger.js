@@ -1,5 +1,5 @@
 // ============================================================
-//  passenger.js — App Passager PNR Taxi (Supabase)
+//  passenger.js — App Passager PicknRide (Supabase)
 // ============================================================
 
 import { supabase } from './supabase-config.js';

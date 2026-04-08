@@ -1,6 +1,6 @@
 {
-  "name": "PNR Taxi",
-  "short_name": "PNR Taxi",
+  "name": "PicknRide",
+  "short_name": "PicknRide",
   "description": "Pick aNd Ride — Trouvez votre taxi instantanément",
   "start_url": "/index.html",
   "scope": "/",

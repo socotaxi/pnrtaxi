@@ -39,7 +39,7 @@ body { font-family: 'Inter', sans-serif; color: var(--text-primary); background:
 .ln-nav-inner {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 14px 24px;
+  padding: 0px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -54,10 +54,11 @@ body { font-family: 'Inter', sans-serif; color: var(--text-primary); background:
 }
 
 .ln-logo-img {
-  height: 38px;
-  width: 120px;
+  height: 80px;
+  width: 80px;
   border-radius: 6px;
   flex-shrink: 0;
+  object-fit: contain;
 }
 
 .ln-logo-text {
@@ -529,6 +530,7 @@ body { font-family: 'Inter', sans-serif; color: var(--text-primary); background:
   justify-content: space-around;
   height: 64px;
   padding-bottom: env(safe-area-inset-bottom);
+  overflow: visible;
 }
 
 .ln-bottom-nav-item {

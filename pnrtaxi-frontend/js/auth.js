@@ -1,5 +1,5 @@
 // ============================================================
-//  auth.js — Système d'authentification PNR Taxi
+//  auth.js — Système d'authentification PicknRide
 //  Flow téléphone : Numéro → lookup → mot de passe OU inscription
 // ============================================================
 

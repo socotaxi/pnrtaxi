@@ -13,7 +13,7 @@ if (isSignup) {
   chip.textContent      = 'Inscription';
   titleEl.textContent   = 'Créer votre compte';
   subEl.textContent     = "Entrez votre numéro pour recevoir un code d'activation";
-  pageTitle.textContent = 'PNR Taxi — Créer un compte';
+  pageTitle.textContent = 'PicknRide — Créer un compte';
   toggle.innerHTML      = 'Déjà un compte ? <a href="login.html">Se connecter</a>';
 } else {
   chip.textContent = 'Connexion';
